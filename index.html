@@ -17,11 +17,7 @@
     <button class="btn" onclick="undo()" title="Ctrl+Z" id="undoBtn" disabled>↶ UNDO</button>
     <button class="btn" onclick="redo()" title="Ctrl+Y" id="redoBtn" disabled>↷ REDO</button>
     <button class="btn" onclick="resetAll()">RESET</button>
-    <select id="exportSize" class="btn" style="padding:6px 8px;font-size:10px;appearance:auto;text-transform:none;">
-      <option value="true">Export True Size</option>
-      <option value="scaled">Export Scaled</option>
-    </select>
-    <button class="btn" onclick="exportImage('png')">COPY PNG</button>
+<button class="btn" onclick="exportImage('png')">COPY PNG</button>
     <button class="btn btn-primary" onclick="exportImage('download')">↓ DOWNLOAD</button>
   </div>
 </div>
@@ -29,8 +25,8 @@
 <div class="app-layout">
   <!-- LEFT PANEL -->
   <div class="panel">
-    <div class="panel-section">
-      <div class="section-title">Pixelation</div>
+    <details class="panel-section" open>
+      <summary class="section-title">Pixelation</summary>
       <div class="control-row">
         <span class="control-label">Resolution</span>
         <span class="control-value" id="resVal">64</span>
@@ -40,10 +36,24 @@
         <span style="font-size:9px;color:var(--text-dim)">8px</span>
         <span style="font-size:9px;color:var(--text-dim)">512px</span>
       </div>
-    </div>
+    </details>
 
-    <div class="panel-section">
-      <div class="section-title">Crop</div>
+    <details class="panel-section">
+      <summary class="section-title">Downscale Filter</summary>
+      <select id="downscaleMethod">
+        <option value="box" selected>Box Average</option>
+        <option value="nearest">Nearest Neighbor</option>
+        <option value="bilinear">Bilinear</option>
+        <option value="lanczos">Lanczos (Sharp)</option>
+        <option value="mode">Mode (Most Common)</option>
+      </select>
+      <div style="font-size:9px;color:var(--text-dim);margin-top:4px;line-height:1.4" id="filterDesc">
+        Averages all source pixels per output cell — clean, balanced.
+      </div>
+    </details>
+
+    <details class="panel-section">
+      <summary class="section-title">Crop</summary>
       <label class="checkbox-row">
         <input type="checkbox" id="squareCrop">
         <span class="check-box"></span>
@@ -75,226 +85,38 @@
         </div>
         <button class="btn" style="width:100%;margin-top:8px" onclick="document.getElementById('panX').value=50;document.getElementById('panY').value=50;document.getElementById('cropZoom').value=100;updateAllLabels();processImage();">Reset View</button>
       </div>
-    </div>
+    </details>
 
-    <div class="panel-section">
-      <div class="section-title">Downscale Filter</div>
-      <select id="downscaleMethod">
-        <option value="box" selected>Box Average</option>
-        <option value="nearest">Nearest Neighbor</option>
-        <option value="bilinear">Bilinear</option>
-        <option value="lanczos">Lanczos (Sharp)</option>
-        <option value="mode">Mode (Most Common)</option>
-      </select>
-      <div style="font-size:9px;color:var(--text-dim);margin-top:4px;line-height:1.4" id="filterDesc">
-        Averages all source pixels per output cell — clean, balanced.
-      </div>
-    </div>
-
-    <div class="panel-section">
-      <div class="section-title">Dithering</div>
-      <div class="control-row">
-        <span class="control-label">Algorithm</span>
-      </div>
-      <select id="ditherMode">
-        <option value="none">None</option>
-        <option value="ordered2">Ordered 2×2 (Bayer)</option>
-        <option value="ordered4">Ordered 4×4 (Bayer)</option>
-        <option value="ordered8">Ordered 8×8 (Bayer)</option>
-        <option value="floyd">Floyd-Steinberg</option>
-        <option value="atkinson">Atkinson</option>
-        <option value="sierra">Sierra Lite</option>
-        <option value="stucki">Stucki</option>
-      </select>
-      <div style="margin-top:12px">
-        <div class="control-row">
-          <span class="control-label">Dither Strength</span>
-          <span class="control-value" id="ditherStrVal">100%</span>
-        </div>
-        <input type="range" id="ditherStrength" min="0" max="100" value="100">
-      </div>
-    </div>
-
-    <div class="panel-section">
-      <div class="section-title">Color Palette</div>
-      <select id="paletteMode">
-        <option value="none">Full Color (No Restriction)</option>
-        <option value="custom">— Classic Palettes —</option>
-        <option value="pal_gameboy">Game Boy (4 colors)</option>
-        <option value="pal_nes">NES (56 colors)</option>
-        <option value="pal_cga">CGA (16 colors)</option>
-        <option value="pal_c64">C64 (16 colors)</option>
-        <option value="pal_pico8">PICO-8 (16 colors)</option>
-        <option value="pal_sweetie16">Sweetie 16</option>
-        <option value="pal_endesga32">Endesga 32</option>
-        <option value="pal_lospec500">Lospec 500</option>
-        <option value="custom2">— Reduction —</option>
-        <option value="mono">Monochrome (1-bit)</option>
-        <option value="gray4">Grayscale 4</option>
-        <option value="gray8">Grayscale 8</option>
-        <option value="gray16">Grayscale 16</option>
-        <option value="rgb8">RGB 8 (3-3-2)</option>
-        <option value="rgb27">RGB 27 (3×3×3)</option>
-        <option value="rgb64">RGB 64 (4×4×4)</option>
-        <option value="median">Median Cut (auto)</option>
-      </select>
-      <div id="palettePreview" class="palette-grid" style="margin-top:10px"></div>
-      <div id="medianCutControls" style="display:none;margin-top:12px">
-        <div class="control-row">
-          <span class="control-label">Palette Size</span>
-          <span class="control-value" id="medianVal">16</span>
-        </div>
-        <input type="range" id="medianColors" min="2" max="64" value="16">
-      </div>
-    </div>
-
-    <div class="panel-section">
-      <div class="section-title">Adjustments</div>
-      <div class="control-row">
-        <span class="control-label">Brightness</span>
-        <span class="control-value" id="brightVal">0</span>
-      </div>
-      <input type="range" id="brightness" min="-100" max="100" value="0">
-      <div class="control-row" style="margin-top:10px">
-        <span class="control-label">Contrast</span>
-        <span class="control-value" id="contrastVal">0</span>
-      </div>
-      <input type="range" id="contrast" min="-100" max="100" value="0">
-      <div class="control-row" style="margin-top:10px">
-        <span class="control-label">Saturation</span>
-        <span class="control-value" id="satVal">0</span>
-      </div>
-      <input type="range" id="saturation" min="-100" max="100" value="0">
-      <div class="control-row" style="margin-top:10px">
-        <span class="control-label">Hue Shift</span>
-        <span class="control-value" id="hueVal">0°</span>
-      </div>
-      <input type="range" id="hueShift" min="0" max="360" value="0">
-    </div>
-
-    <div class="panel-section">
-      <div class="section-title">Tone Curve</div>
-      <div class="control-row">
-        <span class="control-label">Channel</span>
-        <div class="toggle-group" style="margin-left:auto">
-          <button class="toggle-btn active" data-curve="rgb" onclick="setCurveChannel(this)">RGB</button>
-          <button class="toggle-btn" data-curve="r" onclick="setCurveChannel(this)" style="color:#ff4444">R</button>
-          <button class="toggle-btn" data-curve="g" onclick="setCurveChannel(this)" style="color:#44ff44">G</button>
-          <button class="toggle-btn" data-curve="b" onclick="setCurveChannel(this)" style="color:#4488ff">B</button>
-        </div>
-      </div>
-      <div class="curve-editor" id="curveEditor">
-        <svg id="curveSvg" viewBox="0 0 256 256" preserveAspectRatio="xMidYMid meet">
-          <rect x="0" y="0" width="256" height="256" fill="var(--surface3)" rx="2"/>
-          <!-- Grid lines -->
-          <line x1="64" y1="0" x2="64" y2="256" stroke="var(--border)" stroke-width="0.5"/>
-          <line x1="128" y1="0" x2="128" y2="256" stroke="var(--border)" stroke-width="0.5"/>
-          <line x1="192" y1="0" x2="192" y2="256" stroke="var(--border)" stroke-width="0.5"/>
-          <line x1="0" y1="64" x2="256" y2="64" stroke="var(--border)" stroke-width="0.5"/>
-          <line x1="0" y1="128" x2="256" y2="128" stroke="var(--border)" stroke-width="0.5"/>
-          <line x1="0" y1="192" x2="256" y2="192" stroke="var(--border)" stroke-width="0.5"/>
-          <!-- Diagonal reference -->
-          <line x1="0" y1="256" x2="256" y2="0" stroke="var(--border-hi)" stroke-width="1" stroke-dasharray="4,4"/>
-          <!-- Curve path -->
-          <path id="curvePath" d="" fill="none" stroke="var(--accent)" stroke-width="2"/>
-          <!-- Control points rendered dynamically -->
-          <g id="curvePoints"></g>
-        </svg>
-      </div>
-      <div style="display:flex;justify-content:space-between;margin-top:4px">
-        <span style="font-size:9px;color:var(--text-dim)">Click curve to add point. Right-click to remove.</span>
-        <button class="btn" style="font-size:9px;padding:3px 8px" onclick="resetCurve()">Reset</button>
-      </div>
-    </div>
-
-    <div class="panel-section">
-      <div class="section-title">Sharpen</div>
-      <div class="control-row">
-        <span class="control-label">Amount</span>
-        <span class="control-value" id="sharpenVal">0</span>
-      </div>
-      <input type="range" id="sharpenAmount" min="0" max="100" value="0">
-      <div style="font-size:9px;color:var(--text-dim);margin-top:2px">
-        Unsharp mask — makes pixel edges pop
-      </div>
-    </div>
-
-    <div class="panel-section">
-      <div class="section-title">Noise</div>
-      <div class="control-row">
-        <span class="control-label">Amount</span>
-        <span class="control-value" id="noiseAmountVal">0</span>
-      </div>
-      <input type="range" id="noiseAmount" min="0" max="100" value="0">
-      <div class="control-row" style="margin-top:10px">
-        <span class="control-label">Type</span>
-      </div>
-      <div class="toggle-group">
-        <button class="toggle-btn active" data-noise="mono" onclick="setNoiseType(this)">Mono</button>
-        <button class="toggle-btn" data-noise="color" onclick="setNoiseType(this)">Color</button>
-        <button class="toggle-btn" data-noise="dither" onclick="setNoiseType(this)">Dither</button>
-      </div>
-      <div style="font-size:9px;color:var(--text-dim);margin-top:4px">
-        Breaks up flat areas — mono is luminance, color per-channel, dither is 1-bit
-      </div>
-    </div>
-
-    <div class="panel-section">
-      <div class="section-title">Alpha</div>
-      <div class="control-row">
-        <span class="control-label">Alpha Source</span>
-      </div>
-      <select id="alphaMode">
-        <option value="none">None (Opaque)</option>
-        <option value="source">Preserve Source Alpha</option>
-        <option value="luma">Generate from Luminance</option>
-        <option value="lumaInv">Luminance (Inverted)</option>
-        <option value="colorkey">Color Key</option>
-      </select>
-      <div id="colorKeyControls" style="display:none;margin-top:10px">
-        <div class="control-row">
-          <span class="control-label">Key Color</span>
-          <input type="color" id="colorKeyPick" value="#ff00ff" style="width:28px;height:20px;border:1px solid var(--border);background:var(--surface3);padding:0;cursor:pointer">
-        </div>
-        <div class="control-row" style="margin-top:8px">
-          <span class="control-label">Tolerance</span>
-          <span class="control-value" id="colorKeyTolVal">30</span>
-        </div>
-        <input type="range" id="colorKeyTolerance" min="0" max="100" value="30">
-      </div>
-      <div id="lumaThreshControls" style="display:none;margin-top:10px">
-        <div class="control-row">
-          <span class="control-label">Threshold</span>
-          <span class="control-value" id="lumaThreshVal">50%</span>
-        </div>
-        <input type="range" id="lumaThreshold" min="0" max="100" value="50">
-      </div>
-    </div>
-
-    <div class="panel-section">
-      <div class="section-title">Outline</div>
+    <details class="panel-section">
+      <summary class="section-title">Lighting Normalize</summary>
       <label class="checkbox-row">
-        <input type="checkbox" id="outlineEnabled">
+        <input type="checkbox" id="lightNormEnabled">
         <span class="check-box"></span>
-        Enable Outline
+        Even Out Lighting
       </label>
-      <div class="control-row">
-        <span class="control-label">Threshold</span>
-        <span class="control-value" id="outlineThreshVal">30</span>
-      </div>
-      <input type="range" id="outlineThreshold" min="5" max="100" value="30">
-      <div style="margin-top:8px">
-        <span class="control-label">Outline Color</span>
-        <div class="toggle-group" style="margin-top:4px">
-          <button class="toggle-btn active" data-outline="black" onclick="setOutlineColor(this)">Black</button>
-          <button class="toggle-btn" data-outline="dark" onclick="setOutlineColor(this)">Dark</button>
-          <button class="toggle-btn" data-outline="custom" onclick="setOutlineColor(this)">Pick</button>
+      <div id="lightNormControls" style="display:none">
+        <div class="control-row">
+          <span class="control-label">Grid Samples</span>
+          <span class="control-value" id="lightNormGridVal">8</span>
+        </div>
+        <input type="range" id="lightNormGrid" min="3" max="16" value="8" step="1">
+        <div style="display:flex;justify-content:space-between;margin-top:2px">
+          <span style="font-size:9px;color:var(--text-dim)">3×3</span>
+          <span style="font-size:9px;color:var(--text-dim)">16×16</span>
+        </div>
+        <div class="control-row" style="margin-top:10px">
+          <span class="control-label">Strength</span>
+          <span class="control-value" id="lightNormStrVal">100%</span>
+        </div>
+        <input type="range" id="lightNormStr" min="0" max="100" value="100">
+        <div style="font-size:9px;color:var(--text-dim);margin-top:4px;line-height:1.4">
+          Samples lightness across a grid, then compensates to even out uneven illumination (dark corners, bright spots).
         </div>
       </div>
-    </div>
+    </details>
 
-    <div class="panel-section">
-      <div class="section-title">Tiling</div>
+    <details class="panel-section">
+      <summary class="section-title">Tiling</summary>
       <label class="checkbox-row">
         <input type="checkbox" id="tileEnabled">
         <span class="check-box"></span>
@@ -346,7 +168,210 @@
           <input type="range" id="edgeMix" min="0" max="100" value="50">
         </div>
       </div>
-    </div>
+    </details>
+
+    <details class="panel-section">
+      <summary class="section-title">Dithering</summary>
+      <div class="control-row">
+        <span class="control-label">Algorithm</span>
+      </div>
+      <select id="ditherMode">
+        <option value="none">None</option>
+        <option value="ordered2">Ordered 2×2 (Bayer)</option>
+        <option value="ordered4">Ordered 4×4 (Bayer)</option>
+        <option value="ordered8">Ordered 8×8 (Bayer)</option>
+        <option value="floyd">Floyd-Steinberg</option>
+        <option value="atkinson">Atkinson</option>
+        <option value="sierra">Sierra Lite</option>
+        <option value="stucki">Stucki</option>
+      </select>
+      <div style="margin-top:12px">
+        <div class="control-row">
+          <span class="control-label">Dither Strength</span>
+          <span class="control-value" id="ditherStrVal">100%</span>
+        </div>
+        <input type="range" id="ditherStrength" min="0" max="100" value="100">
+      </div>
+    </details>
+
+    <details class="panel-section">
+      <summary class="section-title">Color Palette</summary>
+      <select id="paletteMode">
+        <option value="none">Full Color (No Restriction)</option>
+        <option value="custom">— Classic Palettes —</option>
+        <option value="pal_gameboy">Game Boy (4 colors)</option>
+        <option value="pal_nes">NES (56 colors)</option>
+        <option value="pal_cga">CGA (16 colors)</option>
+        <option value="pal_c64">C64 (16 colors)</option>
+        <option value="pal_pico8">PICO-8 (16 colors)</option>
+        <option value="pal_sweetie16">Sweetie 16</option>
+        <option value="pal_endesga32">Endesga 32</option>
+        <option value="pal_lospec500">Lospec 500</option>
+        <option value="custom2">— Reduction —</option>
+        <option value="mono">Monochrome (1-bit)</option>
+        <option value="gray4">Grayscale 4</option>
+        <option value="gray8">Grayscale 8</option>
+        <option value="gray16">Grayscale 16</option>
+        <option value="rgb8">RGB 8 (3-3-2)</option>
+        <option value="rgb27">RGB 27 (3×3×3)</option>
+        <option value="rgb64">RGB 64 (4×4×4)</option>
+        <option value="median">Median Cut (auto)</option>
+      </select>
+      <div id="palettePreview" class="palette-grid" style="margin-top:10px"></div>
+      <div id="medianCutControls" style="display:none;margin-top:12px">
+        <div class="control-row">
+          <span class="control-label">Palette Size</span>
+          <span class="control-value" id="medianVal">16</span>
+        </div>
+        <input type="range" id="medianColors" min="2" max="64" value="16">
+      </div>
+    </details>
+
+    <details class="panel-section">
+      <summary class="section-title">Adjustments</summary>
+      <div class="control-row">
+        <span class="control-label">Brightness</span>
+        <span class="control-value" id="brightVal">0</span>
+      </div>
+      <input type="range" id="brightness" min="-100" max="100" value="0">
+      <div class="control-row" style="margin-top:10px">
+        <span class="control-label">Contrast</span>
+        <span class="control-value" id="contrastVal">0</span>
+      </div>
+      <input type="range" id="contrast" min="-100" max="100" value="0">
+      <div class="control-row" style="margin-top:10px">
+        <span class="control-label">Saturation</span>
+        <span class="control-value" id="satVal">0</span>
+      </div>
+      <input type="range" id="saturation" min="-100" max="100" value="0">
+      <div class="control-row" style="margin-top:10px">
+        <span class="control-label">Hue Shift</span>
+        <span class="control-value" id="hueVal">0°</span>
+      </div>
+      <input type="range" id="hueShift" min="0" max="360" value="0">
+    </details>
+
+    <details class="panel-section">
+      <summary class="section-title">Tone Curve</summary>
+      <div class="control-row">
+        <span class="control-label">Channel</span>
+        <div class="toggle-group" style="margin-left:auto">
+          <button class="toggle-btn active" data-curve="rgb" onclick="setCurveChannel(this)">RGB</button>
+          <button class="toggle-btn" data-curve="r" onclick="setCurveChannel(this)" style="color:#ff4444">R</button>
+          <button class="toggle-btn" data-curve="g" onclick="setCurveChannel(this)" style="color:#44ff44">G</button>
+          <button class="toggle-btn" data-curve="b" onclick="setCurveChannel(this)" style="color:#4488ff">B</button>
+        </div>
+      </div>
+      <div class="curve-editor" id="curveEditor">
+        <svg id="curveSvg" viewBox="0 0 256 256" preserveAspectRatio="xMidYMid meet">
+          <rect x="0" y="0" width="256" height="256" fill="var(--surface3)" rx="2"/>
+          <!-- Grid lines -->
+          <line x1="64" y1="0" x2="64" y2="256" stroke="var(--border)" stroke-width="0.5"/>
+          <line x1="128" y1="0" x2="128" y2="256" stroke="var(--border)" stroke-width="0.5"/>
+          <line x1="192" y1="0" x2="192" y2="256" stroke="var(--border)" stroke-width="0.5"/>
+          <line x1="0" y1="64" x2="256" y2="64" stroke="var(--border)" stroke-width="0.5"/>
+          <line x1="0" y1="128" x2="256" y2="128" stroke="var(--border)" stroke-width="0.5"/>
+          <line x1="0" y1="192" x2="256" y2="192" stroke="var(--border)" stroke-width="0.5"/>
+          <!-- Diagonal reference -->
+          <line x1="0" y1="256" x2="256" y2="0" stroke="var(--border-hi)" stroke-width="1" stroke-dasharray="4,4"/>
+          <!-- Curve path -->
+          <path id="curvePath" d="" fill="none" stroke="var(--accent)" stroke-width="2"/>
+          <!-- Control points rendered dynamically -->
+          <g id="curvePoints"></g>
+        </svg>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:4px">
+        <span style="font-size:9px;color:var(--text-dim)">Click curve to add point. Right-click to remove.</span>
+        <button class="btn" style="font-size:9px;padding:3px 8px" onclick="resetCurve()">Reset</button>
+      </div>
+    </details>
+
+    <details class="panel-section">
+      <summary class="section-title">Sharpen</summary>
+      <div class="control-row">
+        <span class="control-label">Amount</span>
+        <span class="control-value" id="sharpenVal">0</span>
+      </div>
+      <input type="range" id="sharpenAmount" min="0" max="100" value="0">
+      <div style="font-size:9px;color:var(--text-dim);margin-top:2px">
+        Unsharp mask — makes pixel edges pop
+      </div>
+    </details>
+
+    <details class="panel-section">
+      <summary class="section-title">Noise</summary>
+      <div class="control-row">
+        <span class="control-label">Amount</span>
+        <span class="control-value" id="noiseAmountVal">0</span>
+      </div>
+      <input type="range" id="noiseAmount" min="0" max="100" value="0">
+      <div class="control-row" style="margin-top:10px">
+        <span class="control-label">Type</span>
+      </div>
+      <div class="toggle-group">
+        <button class="toggle-btn active" data-noise="mono" onclick="setNoiseType(this)">Mono</button>
+        <button class="toggle-btn" data-noise="color" onclick="setNoiseType(this)">Color</button>
+        <button class="toggle-btn" data-noise="dither" onclick="setNoiseType(this)">Dither</button>
+      </div>
+      <div style="font-size:9px;color:var(--text-dim);margin-top:4px">
+        Breaks up flat areas — mono is luminance, color per-channel, dither is 1-bit
+      </div>
+    </details>
+
+    <details class="panel-section">
+      <summary class="section-title">Alpha</summary>
+      <div class="control-row">
+        <span class="control-label">Alpha Source</span>
+      </div>
+      <select id="alphaMode">
+        <option value="none">None (Opaque)</option>
+        <option value="source">Preserve Source Alpha</option>
+        <option value="luma">Generate from Luminance</option>
+        <option value="lumaInv">Luminance (Inverted)</option>
+        <option value="colorkey">Color Key</option>
+      </select>
+      <div id="colorKeyControls" style="display:none;margin-top:10px">
+        <div class="control-row">
+          <span class="control-label">Key Color</span>
+          <input type="color" id="colorKeyPick" value="#ff00ff" style="width:28px;height:20px;border:1px solid var(--border);background:var(--surface3);padding:0;cursor:pointer">
+        </div>
+        <div class="control-row" style="margin-top:8px">
+          <span class="control-label">Tolerance</span>
+          <span class="control-value" id="colorKeyTolVal">30</span>
+        </div>
+        <input type="range" id="colorKeyTolerance" min="0" max="100" value="30">
+      </div>
+      <div id="lumaThreshControls" style="display:none;margin-top:10px">
+        <div class="control-row">
+          <span class="control-label">Threshold</span>
+          <span class="control-value" id="lumaThreshVal">50%</span>
+        </div>
+        <input type="range" id="lumaThreshold" min="0" max="100" value="50">
+      </div>
+    </details>
+
+    <details class="panel-section">
+      <summary class="section-title">Outline</summary>
+      <label class="checkbox-row">
+        <input type="checkbox" id="outlineEnabled">
+        <span class="check-box"></span>
+        Enable Outline
+      </label>
+      <div class="control-row">
+        <span class="control-label">Threshold</span>
+        <span class="control-value" id="outlineThreshVal">30</span>
+      </div>
+      <input type="range" id="outlineThreshold" min="5" max="100" value="30">
+      <div style="margin-top:8px">
+        <span class="control-label">Outline Color</span>
+        <div class="toggle-group" style="margin-top:4px">
+          <button class="toggle-btn active" data-outline="black" onclick="setOutlineColor(this)">Black</button>
+          <button class="toggle-btn" data-outline="dark" onclick="setOutlineColor(this)">Dark</button>
+          <button class="toggle-btn" data-outline="custom" onclick="setOutlineColor(this)">Pick</button>
+        </div>
+      </div>
+    </details>
+
   </div>
   <div class="canvas-area">
     <div class="canvas-toolbar">
@@ -379,8 +404,8 @@
 
   <!-- RIGHT PANEL -->
   <div class="panel">
-    <div class="panel-section">
-      <div class="section-title">Image Info</div>
+    <details class="panel-section" open>
+      <summary class="section-title">Image Info</summary>
       <div class="info-grid">
         <div class="info-item">
           <div class="info-label">Source</div>
@@ -399,10 +424,10 @@
           <div class="info-value" id="infoPalette">—</div>
         </div>
       </div>
-    </div>
+    </details>
 
-    <div class="panel-section">
-      <div class="section-title">Presets</div>
+    <details class="panel-section" open>
+      <summary class="section-title">Presets</summary>
       <div class="preset-list">
         <div class="preset-item" onclick="applyPreset('gameboy')">
           <div class="preset-preview" style="background:linear-gradient(135deg,#0f380f,#306230,#8bac0f,#9bbc0f)"></div>
@@ -429,10 +454,10 @@
           <div><div class="preset-name">Hi-Res Pixel</div><div class="preset-desc">256px, median cut 32</div></div>
         </div>
       </div>
-    </div>
+    </details>
 
-    <div class="panel-section">
-      <div class="section-title">Tips</div>
+    <details class="panel-section" open>
+      <summary class="section-title">Tips</summary>
       <div style="font-size:10px;color:var(--text-dim);line-height:1.6">
         • Lower resolution = chunkier pixels<br>
         • Ordered dither = uniform pattern<br>
@@ -440,7 +465,7 @@
         • Pair restricted palettes with dithering for best results<br>
         • Use outlines for sprite-like look
       </div>
-    </div>
+    </details>
   </div>
 </div>
 

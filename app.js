@@ -753,6 +753,80 @@ function tileWeaveBlend(src, w, h, blendPct) {
   return imageDataToCanvas(imgData);
 }
 
+// ===================== ILLUMINATION NORMALIZATION =====================
+// Samples lightness on a grid, interpolates a lightness map, and compensates
+// each pixel to even out uneven lighting (dark corners, bright spots, etc.)
+function applyLightingNormalize(src, w, h, gridSize, strength) {
+  const imgData = getSourceData(src, w, h);
+  const d = imgData.data;
+  const n = w * h;
+
+  // Step 1: Compute average luminance in each grid cell
+  const gw = gridSize, gh = gridSize;
+  const cellW = w / gw, cellH = h / gh;
+  const gridLum = new Float32Array(gw * gh);
+  const gridCount = new Uint32Array(gw * gh);
+
+  for (let y = 0; y < h; y++) {
+    const gy = Math.min(gh - 1, Math.floor(y / cellH));
+    for (let x = 0; x < w; x++) {
+      const gx = Math.min(gw - 1, Math.floor(x / cellW));
+      const i = (y * w + x) * 4;
+      const lum = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+      const gi = gy * gw + gx;
+      gridLum[gi] += lum;
+      gridCount[gi]++;
+    }
+  }
+
+  // Average each cell
+  for (let i = 0; i < gw * gh; i++) {
+    gridLum[i] = gridCount[i] > 0 ? gridLum[i] / gridCount[i] : 128;
+  }
+
+  // Step 2: Compute global average luminance
+  let globalLum = 0;
+  for (let i = 0; i < gw * gh; i++) globalLum += gridLum[i];
+  globalLum /= (gw * gh);
+  if (globalLum < 1) globalLum = 1; // avoid division by zero
+
+  // Step 3: Bilinearly interpolate the grid into a per-pixel lightness map
+  // and apply multiplicative correction
+  for (let y = 0; y < h; y++) {
+    // Map pixel center to grid coordinates (cell centers)
+    const gy = (y + 0.5) / cellH - 0.5;
+    const gy0 = Math.max(0, Math.floor(gy));
+    const gy1 = Math.min(gh - 1, gy0 + 1);
+    const fy = gy - gy0;
+
+    for (let x = 0; x < w; x++) {
+      const gx = (x + 0.5) / cellW - 0.5;
+      const gx0 = Math.max(0, Math.floor(gx));
+      const gx1 = Math.min(gw - 1, gx0 + 1);
+      const fx = gx - gx0;
+
+      // Bilinear interpolation of local luminance
+      const top = gridLum[gy0 * gw + gx0] * (1 - fx) + gridLum[gy0 * gw + gx1] * fx;
+      const bot = gridLum[gy1 * gw + gx0] * (1 - fx) + gridLum[gy1 * gw + gx1] * fx;
+      const localLum = top * (1 - fy) + bot * fy;
+
+      if (localLum < 1) continue; // skip near-black to avoid blowout
+
+      // Multiplicative correction: pixel * (globalAvg / localAvg)
+      // Blend with strength: factor = lerp(1, globalAvg/localAvg, strength)
+      const correction = globalLum / localLum;
+      const factor = 1 + (correction - 1) * strength;
+
+      const i = (y * w + x) * 4;
+      d[i]     = clamp(Math.round(d[i] * factor));
+      d[i + 1] = clamp(Math.round(d[i + 1] * factor));
+      d[i + 2] = clamp(Math.round(d[i + 2] * factor));
+    }
+  }
+
+  return imageDataToCanvas(imgData);
+}
+
 // Dispatcher
 function applyTileBlend(src, w, h, method, blendPct, pyramidLevels) {
   switch (method) {
@@ -780,7 +854,8 @@ const _snapshotIds = [
   'sharpenAmount','noiseAmount','alphaMode','colorKeyTolerance','lumaThreshold','colorKeyPick',
   'outlineEnabled','outlineThreshold',
   'tileEnabled','tileMethod','blendWidth','edgeMix','edgeMatchEnabled','pyramidLevels',
-  'squareCrop','panX','panY','cropZoom'
+  'squareCrop','panX','panY','cropZoom',
+  'lightNormEnabled','lightNormGrid','lightNormStr'
 ];
 
 function takeSnapshot() {
@@ -827,6 +902,7 @@ function restoreSnapshot(snap) {
   document.getElementById('colorKeyControls').style.display = am === 'colorkey' ? 'block' : 'none';
   document.getElementById('lumaThreshControls').style.display = (am === 'luma' || am === 'lumaInv') ? 'block' : 'none';
   document.getElementById('outputCanvas').classList.toggle('pannable', document.getElementById('squareCrop').checked);
+  document.getElementById('lightNormControls').style.display = document.getElementById('lightNormEnabled').checked ? 'block' : 'none';
 
   _preCache.key = '';
   updateAllLabels();
@@ -1164,9 +1240,14 @@ function processImage() {
 
   // Pre-step: Crop source if square crop is enabled
   // Build cache key for expensive pre-processing steps
+  const lightNormOn = document.getElementById('lightNormEnabled').checked;
+  const lightNormGrid = parseInt(document.getElementById('lightNormGrid').value);
+  const lightNormStr = parseInt(document.getElementById('lightNormStr').value) / 100;
+
   const preCacheKey = [res, downMethod, squareCrop, panXPct, panYPct, cropZoom,
     tileOn, tileMethod, blendPct,
-    tileOn ? document.getElementById('pyramidLevels').value : 0].join('|');
+    tileOn ? document.getElementById('pyramidLevels').value : 0,
+    lightNormOn, lightNormGrid, lightNormStr].join('|');
 
   let d, imgData, smallCanvas, sctx;
 
@@ -1193,10 +1274,16 @@ function processImage() {
   const cw = squareCrop ? srcW : sw;
   const ch = squareCrop ? srcH : sh;
 
+  // Pre-processing: Lighting normalization (operates at cropped source resolution)
+  let normSource = croppedSource;
+  if (lightNormOn && lightNormStr > 0) {
+    normSource = applyLightingNormalize(croppedSource, cw, ch, lightNormGrid, lightNormStr);
+  }
+
   // Pre-processing: Tile blend (operates at cropped source resolution)
-  let tileSource = croppedSource;
+  let tileSource = normSource;
   if (tileOn) {
-    tileSource = applyTileBlend(croppedSource, cw, ch, tileMethod, blendPct,
+    tileSource = applyTileBlend(normSource, cw, ch, tileMethod, blendPct,
       parseInt(document.getElementById('pyramidLevels').value));
   }
 
@@ -1849,11 +1936,7 @@ function applyPreset(name) {
 // ===================== EXPORT =====================
 function exportImage(mode) {
   if (!sourceImage) return;
-  const useTrue = document.getElementById('exportSize').value === 'true';
-  // True size = the raw pixel canvas (e.g. 64×64), Scaled = the display canvas
-  const exportCanvas = useTrue
-    ? (lastSmallCanvas || document.getElementById('outputCanvas'))
-    : document.getElementById('outputCanvas');
+  const exportCanvas = lastSmallCanvas || document.getElementById('outputCanvas');
   if (mode === 'download') {
     const link = document.createElement('a');
     const res = getResolution();
@@ -1899,6 +1982,10 @@ function resetAll() {
   document.getElementById('panY').value = 50;
   document.getElementById('cropZoom').value = 100;
   document.getElementById('outputCanvas').classList.remove('pannable');
+  document.getElementById('lightNormEnabled').checked = false;
+  document.getElementById('lightNormControls').style.display = 'none';
+  document.getElementById('lightNormGrid').value = 8;
+  document.getElementById('lightNormStr').value = 100;
   outlineColorMode = 'black';
   noiseType = 'mono';
   document.querySelectorAll('[data-outline]').forEach(b => b.classList.remove('active'));
@@ -1950,6 +2037,8 @@ function updateAllLabels() {
   document.getElementById('noiseAmountVal').textContent = document.getElementById('noiseAmount').value;
   document.getElementById('colorKeyTolVal').textContent = document.getElementById('colorKeyTolerance').value;
   document.getElementById('lumaThreshVal').textContent = document.getElementById('lumaThreshold').value + '%';
+  document.getElementById('lightNormGridVal').textContent = document.getElementById('lightNormGrid').value;
+  document.getElementById('lightNormStrVal').textContent = document.getElementById('lightNormStr').value + '%';
 }
 
 // ===================== EVENT LISTENERS =====================
@@ -1965,7 +2054,7 @@ function processDebounced() {
   });
 }
 
-const sliderIds = ['resolution','ditherStrength','brightness','contrast','saturation','hueShift','outlineThreshold','medianColors','blendWidth','edgeMix','panX','panY','pyramidLevels','cropZoom','sharpenAmount','noiseAmount','colorKeyTolerance','lumaThreshold'];
+const sliderIds = ['resolution','ditherStrength','brightness','contrast','saturation','hueShift','outlineThreshold','medianColors','blendWidth','edgeMix','panX','panY','pyramidLevels','cropZoom','sharpenAmount','noiseAmount','colorKeyTolerance','lumaThreshold','lightNormGrid','lightNormStr'];
 sliderIds.forEach(id => {
   const el = document.getElementById(id);
   if (!el) return;
@@ -2070,6 +2159,12 @@ document.getElementById('squareCrop').addEventListener('change', () => {
     processDebounced();
   }, { passive: false });
 })();
+
+document.getElementById('lightNormEnabled').addEventListener('change', () => {
+  document.getElementById('lightNormControls').style.display =
+    document.getElementById('lightNormEnabled').checked ? 'block' : 'none';
+  processImage();
+});
 
 document.getElementById('tileEnabled').addEventListener('change', () => {
   document.getElementById('tileControls').style.display =
