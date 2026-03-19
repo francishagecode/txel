@@ -151,6 +151,11 @@
           <option value="gradaware">Gradient-Aware</option>
           <option value="weave">Sinusoidal Weave</option>
           <option value="multiscale">Multi-Scale Pyramid</option>
+          <option value="mirror">Mirror Fold</option>
+          <option value="rotate">Rotational (180°)</option>
+          <option value="jigsaw">Jigsaw Interleave</option>
+          <option value="stamp">Patch Stamp</option>
+          <option value="mincut">Min-Cost Seam</option>
         </select>
         <div style="font-size:9px;color:var(--text-dim);margin-top:4px;line-height:1.4" id="methodDesc">
           Wraps edges and cross-fades overlap — smooth, preserves center.
@@ -473,6 +478,12 @@
 
     <details class="panel-section" open>
       <summary class="section-title">Presets</summary>
+      <div class="preset-save-load">
+        <button class="btn" style="flex:1" onclick="savePresetFile()">SAVE PRESET</button>
+        <button class="btn" style="flex:1" onclick="document.getElementById('presetFileInput').click()">LOAD PRESET</button>
+        <input type="file" id="presetFileInput" accept=".txel,.json" style="display:none">
+      </div>
+      <div id="savedPresetsList" class="preset-list"></div>
       <div class="preset-list">
         <div class="preset-item" onclick="applyPreset('gameboy')">
           <div class="preset-preview" style="background:linear-gradient(135deg,#0f380f,#306230,#8bac0f,#9bbc0f)"></div>
@@ -514,6 +525,12 @@
   </div>
 </div>
 
-<script src="app.js"></script>
+<script src="state.js"></script>
+<script src="palettes.js"></script>
+<script src="utils.js"></script>
+<script src="tile-blend.js"></script>
+<script src="effects.js"></script>
+<script src="process.js"></script>
+<script src="ui.js"></script>
 </body>
 </html>

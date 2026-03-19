@@ -430,7 +430,29 @@ canvas.pannable:active { cursor: grabbing; }
   image-rendering: pixelated;
 }
 .preset-name { font-size: 11px; }
-.preset-desc { font-size: 9px; color: var(--text-dim); margin-top: 2px; }
+.preset-desc { font-size: 9px; color: var(--text-dim); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.preset-save-load {
+  display: flex; gap: 6px; margin-bottom: 8px;
+}
+.saved-preset-icon {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 8px; font-weight: 700; letter-spacing: 1px;
+  color: var(--accent); background: var(--surface2);
+}
+.preset-item-actions {
+  display: flex; gap: 2px; flex-shrink: 0;
+}
+.preset-btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px; line-height: 1;
+  background: none; border: 1px solid var(--border); color: var(--text-dim);
+  width: 22px; height: 22px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.preset-btn:hover { border-color: var(--accent); color: var(--text); }
+.preset-btn-del:hover { border-color: var(--pink); color: var(--pink); }
 
 /* VIEW TOGGLE */
 .view-toggle {
