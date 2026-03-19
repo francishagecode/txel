@@ -108,6 +108,7 @@ body {
 
 details.panel-section > summary {
   list-style: none;
+  list-style-type: none;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -123,6 +124,10 @@ details.panel-section > summary:hover {
   background: rgba(255,255,255,0.03);
 }
 details.panel-section > summary::-webkit-details-marker {
+  display: none;
+}
+details.panel-section > summary::marker {
+  content: '';
   display: none;
 }
 details.panel-section > summary::after {
@@ -442,6 +447,57 @@ canvas.pannable:active { cursor: grabbing; }
   letter-spacing: 1px;
 }
 .view-btn.active { border-color: var(--accent); color: var(--accent); }
+
+/* IMPORT PALETTE BUTTON */
+.btn-import-pal {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  background: var(--surface3);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  margin-top: 4px;
+}
+.btn-import-pal:hover { border-color: var(--accent); color: var(--accent); }
+
+/* CUSTOM PALETTE ENTRIES */
+.custom-pal-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  background: var(--surface3);
+  border: 1px solid var(--border);
+  margin-bottom: 3px;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+.custom-pal-entry .pal-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.custom-pal-entry .pal-count {
+  font-size: 9px;
+  color: var(--text-dim);
+  margin: 0 8px;
+}
+.custom-pal-entry .pal-delete {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 2px;
+  line-height: 1;
+  font-family: 'JetBrains Mono', monospace;
+}
+.custom-pal-entry .pal-delete:hover { color: var(--pink); }
 
 /* Responsive */
 @media (max-width: 1100px) {

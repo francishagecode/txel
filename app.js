@@ -15,6 +15,238 @@ let lastSmallCanvas = null;
 // Cache for expensive pre-processing (crop + tile + downscale)
 let _preCache = { key: '', data: null, tw: 0, th: 0, sw: 0, sh: 0 };
 
+// Custom palettes from Lospec import (persisted in localStorage)
+let customPalettes = {};
+
+// ===================== LOSPEC PALETTE IMPORT =====================
+function parseLospecPalette(text) {
+  const lines = text.split(/\r?\n/);
+  let name = 'Imported Palette';
+  const colors = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (trimmed.startsWith(';')) {
+      const nameMatch = trimmed.match(/;Palette Name:\s*(.+)/i);
+      if (nameMatch) name = nameMatch[1].trim();
+      continue;
+    }
+    // Data line: AARRGGBB (8 hex chars) or RRGGBB (6 hex chars)
+    const hexMatch = trimmed.match(/^([0-9a-fA-F]{6,8})$/);
+    if (hexMatch) {
+      const hex = hexMatch[1];
+      let r, g, b;
+      if (hex.length === 8) {
+        // AARRGGBB — skip alpha
+        r = parseInt(hex.slice(2, 4), 16);
+        g = parseInt(hex.slice(4, 6), 16);
+        b = parseInt(hex.slice(6, 8), 16);
+      } else {
+        r = parseInt(hex.slice(0, 2), 16);
+        g = parseInt(hex.slice(2, 4), 16);
+        b = parseInt(hex.slice(4, 6), 16);
+      }
+      colors.push([r, g, b]);
+    }
+  }
+  return { name, colors };
+}
+
+function saveCustomPalettes() {
+  localStorage.setItem('txel_customPalettes', JSON.stringify(customPalettes));
+}
+
+function loadCustomPalettes() {
+  try {
+    const stored = localStorage.getItem('txel_customPalettes');
+    if (stored) customPalettes = JSON.parse(stored);
+  } catch(e) { customPalettes = {}; }
+}
+
+function generatePaletteKey(name) {
+  // Create a unique key from the name
+  let key = 'imported_' + name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+  // Ensure uniqueness
+  let base = key, i = 2;
+  while (customPalettes[key]) { key = base + '_' + i; i++; }
+  return key;
+}
+
+function addCustomPaletteToDropdown(key, name, colorCount) {
+  const select = document.getElementById('paletteMode');
+  const marker = select.querySelector('option[value="customImported"]');
+  if (!marker) return;
+  const opt = document.createElement('option');
+  opt.value = key;
+  opt.textContent = 'Custom: ' + name + ' (' + colorCount + ')';
+  // Insert after the marker
+  marker.after(opt);
+}
+
+function removeCustomPalette(key) {
+  delete customPalettes[key];
+  saveCustomPalettes();
+  // Remove from dropdown
+  const opt = document.querySelector('#paletteMode option[value="' + key + '"]');
+  if (opt) opt.remove();
+  // If currently selected, reset
+  if (document.getElementById('paletteMode').value === key) {
+    document.getElementById('paletteMode').value = 'none';
+    processImage();
+  }
+  renderCustomPaletteList();
+}
+
+function renderCustomPaletteList() {
+  const container = document.getElementById('customPaletteList');
+  if (!container) return;
+  const keys = Object.keys(customPalettes);
+  if (keys.length === 0) { container.innerHTML = ''; return; }
+  container.innerHTML = keys.map(key => {
+    const pal = customPalettes[key];
+    return '<div class="custom-pal-entry">' +
+      '<span class="pal-name">' + pal.name + '</span>' +
+      '<span class="pal-count">' + pal.colors.length + 'c</span>' +
+      '<button class="pal-delete" onclick="removeCustomPalette(\'' + key + '\')" title="Delete">&times;</button>' +
+      '</div>';
+  }).join('');
+}
+
+function importPaletteFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const result = parseLospecPalette(e.target.result);
+    if (result.colors.length === 0) return;
+    const key = generatePaletteKey(result.name);
+    customPalettes[key] = { name: result.name, colors: result.colors };
+    saveCustomPalettes();
+    addCustomPaletteToDropdown(key, result.name, result.colors.length);
+    renderCustomPaletteList();
+    // Select the imported palette
+    document.getElementById('paletteMode').value = key;
+    processImage();
+  };
+  reader.readAsText(file);
+}
+
+// ===================== SOBEL EDGE DETECTION =====================
+function computeEdgeMap(fullData, w, h) {
+  // Compute gradient magnitude using Sobel on luminance
+  const lum = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    lum[i] = fullData[i * 4] * 0.299 + fullData[i * 4 + 1] * 0.587 + fullData[i * 4 + 2] * 0.114;
+  }
+  const mag = new Float32Array(w * h);
+  let maxMag = 0;
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const gx = -lum[(y-1)*w+(x-1)] + lum[(y-1)*w+(x+1)]
+                -2*lum[y*w+(x-1)]    + 2*lum[y*w+(x+1)]
+                -lum[(y+1)*w+(x-1)]  + lum[(y+1)*w+(x+1)];
+      const gy = -lum[(y-1)*w+(x-1)] - 2*lum[(y-1)*w+x] - lum[(y-1)*w+(x+1)]
+                +lum[(y+1)*w+(x-1)]  + 2*lum[(y+1)*w+x] + lum[(y+1)*w+(x+1)];
+      const m = Math.sqrt(gx * gx + gy * gy);
+      mag[y * w + x] = m;
+      if (m > maxMag) maxMag = m;
+    }
+  }
+  if (maxMag > 0) {
+    for (let i = 0; i < mag.length; i++) mag[i] /= maxMag;
+  }
+  return mag;
+}
+
+function downscaleEdgeMap(edgeMap, srcW, srcH, tw, th) {
+  // Take max gradient per output cell
+  const scaleX = srcW / tw;
+  const scaleY = srcH / th;
+  const out = new Float32Array(tw * th);
+  for (let y = 0; y < th; y++) {
+    const sy0 = Math.floor(y * scaleY);
+    const sy1 = Math.min(srcH, Math.ceil((y + 1) * scaleY));
+    for (let x = 0; x < tw; x++) {
+      const sx0 = Math.floor(x * scaleX);
+      const sx1 = Math.min(srcW, Math.ceil((x + 1) * scaleX));
+      let maxVal = 0;
+      for (let sy = sy0; sy < sy1; sy++) {
+        for (let sx = sx0; sx < sx1; sx++) {
+          const v = edgeMap[sy * srcW + sx];
+          if (v > maxVal) maxVal = v;
+        }
+      }
+      out[y * tw + x] = maxVal;
+    }
+  }
+  return out;
+}
+
+// ===================== PALETTE HARMONY =====================
+function findDominantHue(palette) {
+  // Weight by saturation — more saturated colors have stronger hue influence
+  let hueX = 0, hueY = 0, totalWeight = 0;
+  for (const [r, g, b] of palette) {
+    const [h, s, l] = rgbToHsl(r, g, b);
+    const weight = s / 100; // saturation 0-1
+    const rad = h * Math.PI / 180;
+    hueX += Math.cos(rad) * weight;
+    hueY += Math.sin(rad) * weight;
+    totalWeight += weight;
+  }
+  if (totalWeight < 0.01) return 0;
+  let angle = Math.atan2(hueY / totalWeight, hueX / totalWeight) * 180 / Math.PI;
+  if (angle < 0) angle += 360;
+  return angle;
+}
+
+function getHarmonyTargets(dominantHue, scheme) {
+  switch (scheme) {
+    case 'complementary': return [dominantHue, (dominantHue + 180) % 360];
+    case 'analogous': return [(dominantHue - 30 + 360) % 360, dominantHue, (dominantHue + 30) % 360];
+    case 'triadic': return [dominantHue, (dominantHue + 120) % 360, (dominantHue + 240) % 360];
+    case 'split': return [dominantHue, (dominantHue + 150) % 360, (dominantHue + 210) % 360];
+    case 'tetradic': return [dominantHue, (dominantHue + 90) % 360, (dominantHue + 180) % 360, (dominantHue + 270) % 360];
+    default: return [dominantHue];
+  }
+}
+
+function hueDist(a, b) {
+  // Shortest angular distance
+  let d = ((b - a) % 360 + 360) % 360;
+  if (d > 180) d = 360 - d;
+  return d;
+}
+
+function hueDirection(from, to) {
+  // Returns signed shortest direction from -> to
+  let d = ((to - from) % 360 + 360) % 360;
+  if (d > 180) d -= 360;
+  return d;
+}
+
+function applyHarmony(palette, scheme, strength) {
+  if (scheme === 'none' || strength === 0) return palette;
+  const dominantHue = findDominantHue(palette);
+  const targets = getHarmonyTargets(dominantHue, scheme);
+  const str = strength / 100;
+
+  return palette.map(([r, g, b]) => {
+    let [h, s, l] = rgbToHsl(r, g, b);
+    // Skip near-gray colors (very low saturation)
+    if (s < 3) return [r, g, b];
+    // Find nearest harmony target hue
+    let nearestTarget = targets[0];
+    let nearestDist = hueDist(h, targets[0]);
+    for (let i = 1; i < targets.length; i++) {
+      const d = hueDist(h, targets[i]);
+      if (d < nearestDist) { nearestDist = d; nearestTarget = targets[i]; }
+    }
+    // Nudge hue toward target
+    const dir = hueDirection(h, nearestTarget);
+    h = (h + dir * str + 360) % 360;
+    return hslToRgb(h, s, l);
+  });
+}
+
 // ===================== PALETTES =====================
 const PALETTES = {
   pal_gameboy: [[15,56,15],[48,98,48],[139,172,15],[155,188,15]],
@@ -855,7 +1087,9 @@ const _snapshotIds = [
   'outlineEnabled','outlineThreshold',
   'tileEnabled','tileMethod','blendWidth','edgeMix','edgeMatchEnabled','pyramidLevels',
   'squareCrop','panX','panY','cropZoom',
-  'lightNormEnabled','lightNormGrid','lightNormStr'
+  'lightNormEnabled','lightNormGrid','lightNormStr',
+  'edgePreserve','edgeSensitivity',
+  'harmonyMode','harmonyStrength'
 ];
 
 function takeSnapshot() {
@@ -903,6 +1137,8 @@ function restoreSnapshot(snap) {
   document.getElementById('lumaThreshControls').style.display = (am === 'luma' || am === 'lumaInv') ? 'block' : 'none';
   document.getElementById('outputCanvas').classList.toggle('pannable', document.getElementById('squareCrop').checked);
   document.getElementById('lightNormControls').style.display = document.getElementById('lightNormEnabled').checked ? 'block' : 'none';
+  document.getElementById('edgePreserveControls').style.display = document.getElementById('edgePreserve').checked ? 'block' : 'none';
+  document.getElementById('harmonyControls').style.display = document.getElementById('harmonyMode').value !== 'none' ? 'block' : 'none';
 
   _preCache.key = '';
   updateAllLabels();
@@ -1211,6 +1447,10 @@ function processImage() {
   const alphaMode = document.getElementById('alphaMode').value;
   const lumaThresh = parseInt(document.getElementById('lumaThreshold').value) / 100;
   const colorKeyTol = parseInt(document.getElementById('colorKeyTolerance').value);
+  const edgePreserveOn = document.getElementById('edgePreserve').checked;
+  const edgeSensitivity = parseInt(document.getElementById('edgeSensitivity').value) / 100;
+  const harmonyMode = document.getElementById('harmonyMode').value;
+  const harmonyStr = parseInt(document.getElementById('harmonyStrength').value);
 
   const sw = sourceImage.naturalWidth || sourceImage.width;
   const sh = sourceImage.naturalHeight || sourceImage.height;
@@ -1247,7 +1487,8 @@ function processImage() {
   const preCacheKey = [res, downMethod, squareCrop, panXPct, panYPct, cropZoom,
     tileOn, tileMethod, blendPct,
     tileOn ? document.getElementById('pyramidLevels').value : 0,
-    lightNormOn, lightNormGrid, lightNormStr].join('|');
+    lightNormOn, lightNormGrid, lightNormStr,
+    edgePreserveOn, edgeSensitivity].join('|');
 
   let d, imgData, smallCanvas, sctx;
 
@@ -1442,6 +1683,38 @@ function processImage() {
     }
   }
 
+  // Edge-preserving blend: mix between smooth result and nearest-neighbor based on edge map
+  if (edgePreserveOn && downMethod !== 'nearest' && downMethod !== 'mode') {
+    // Compute edge map on full-res source
+    const edgeMap = computeEdgeMap(fullData, fcw, fch);
+    // Downscale edge map (max per cell)
+    const smallEdge = downscaleEdgeMap(edgeMap, fcw, fch, tw, th);
+    // Compute nearest-neighbor (sharp) result
+    const sharpData = new Uint8ClampedArray(tw * th * 4);
+    for (let y = 0; y < th; y++) {
+      const sy = Math.min(fch - 1, Math.floor((y + 0.5) * scaleY));
+      for (let x = 0; x < tw; x++) {
+        const sx = Math.min(fcw - 1, Math.floor((x + 0.5) * scaleX));
+        const si = (sy * fcw + sx) * 4;
+        const di2 = (y * tw + x) * 4;
+        sharpData[di2] = fullData[si];
+        sharpData[di2+1] = fullData[si+1];
+        sharpData[di2+2] = fullData[si+2];
+        sharpData[di2+3] = 255;
+      }
+    }
+    // Blend: result = lerp(smoothResult, sharpResult, edgeStrength * sensitivity)
+    for (let y = 0; y < th; y++) {
+      for (let x = 0; x < tw; x++) {
+        const idx = (y * tw + x) * 4;
+        const blend = Math.min(1, smallEdge[y * tw + x] * edgeSensitivity * 2);
+        for (let c = 0; c < 3; c++) {
+          d[idx + c] = Math.round(d[idx + c] * (1 - blend) + sharpData[idx + c] * blend);
+        }
+      }
+    }
+  }
+
     // Save to cache
     _preCache.key = preCacheKey;
     _preCache.data = new Uint8ClampedArray(d);
@@ -1496,6 +1769,14 @@ function processImage() {
   else if (palMode === 'median') {
     const numC = parseInt(document.getElementById('medianColors').value);
     palette = medianCut(imgData, numC);
+  }
+  else if (palMode.startsWith('imported_') && customPalettes[palMode]) {
+    palette = customPalettes[palMode].colors;
+  }
+
+  // Step 3b: Apply palette harmony
+  if (palette && harmonyMode !== 'none' && harmonyStr > 0) {
+    palette = applyHarmony(palette, harmonyMode, harmonyStr);
   }
 
   // Step 4: Dithering + palette mapping
@@ -1986,6 +2267,12 @@ function resetAll() {
   document.getElementById('lightNormControls').style.display = 'none';
   document.getElementById('lightNormGrid').value = 8;
   document.getElementById('lightNormStr').value = 100;
+  document.getElementById('edgePreserve').checked = false;
+  document.getElementById('edgePreserveControls').style.display = 'none';
+  document.getElementById('edgeSensitivity').value = 50;
+  document.getElementById('harmonyMode').value = 'none';
+  document.getElementById('harmonyControls').style.display = 'none';
+  document.getElementById('harmonyStrength').value = 50;
   outlineColorMode = 'black';
   noiseType = 'mono';
   document.querySelectorAll('[data-outline]').forEach(b => b.classList.remove('active'));
@@ -2039,6 +2326,8 @@ function updateAllLabels() {
   document.getElementById('lumaThreshVal').textContent = document.getElementById('lumaThreshold').value + '%';
   document.getElementById('lightNormGridVal').textContent = document.getElementById('lightNormGrid').value;
   document.getElementById('lightNormStrVal').textContent = document.getElementById('lightNormStr').value + '%';
+  document.getElementById('edgeSensVal').textContent = document.getElementById('edgeSensitivity').value + '%';
+  document.getElementById('harmonyStrVal').textContent = document.getElementById('harmonyStrength').value + '%';
 }
 
 // ===================== EVENT LISTENERS =====================
@@ -2054,7 +2343,7 @@ function processDebounced() {
   });
 }
 
-const sliderIds = ['resolution','ditherStrength','brightness','contrast','saturation','hueShift','outlineThreshold','medianColors','blendWidth','edgeMix','panX','panY','pyramidLevels','cropZoom','sharpenAmount','noiseAmount','colorKeyTolerance','lumaThreshold','lightNormGrid','lightNormStr'];
+const sliderIds = ['resolution','ditherStrength','brightness','contrast','saturation','hueShift','outlineThreshold','medianColors','blendWidth','edgeMix','panX','panY','pyramidLevels','cropZoom','sharpenAmount','noiseAmount','colorKeyTolerance','lumaThreshold','lightNormGrid','lightNormStr','edgeSensitivity','harmonyStrength'];
 sliderIds.forEach(id => {
   const el = document.getElementById(id);
   if (!el) return;
@@ -2091,6 +2380,29 @@ sliderIds.forEach(id => {
 
 document.getElementById('outlineEnabled').addEventListener('change', processImage);
 document.getElementById('colorKeyPick').addEventListener('input', processDebounced);
+
+// Edge preserve toggle
+document.getElementById('edgePreserve').addEventListener('change', () => {
+  document.getElementById('edgePreserveControls').style.display =
+    document.getElementById('edgePreserve').checked ? 'block' : 'none';
+  processImage();
+});
+
+// Harmony mode toggle
+document.getElementById('harmonyMode').addEventListener('change', () => {
+  document.getElementById('harmonyControls').style.display =
+    document.getElementById('harmonyMode').value !== 'none' ? 'block' : 'none';
+  processImage();
+});
+
+// Palette import
+document.getElementById('importPaletteBtn').addEventListener('click', () => {
+  document.getElementById('paletteFileInput').click();
+});
+document.getElementById('paletteFileInput').addEventListener('change', e => {
+  if (e.target.files[0]) importPaletteFile(e.target.files[0]);
+  e.target.value = ''; // reset so same file can be re-imported
+});
 
 document.getElementById('squareCrop').addEventListener('change', () => {
   const on = document.getElementById('squareCrop').checked;
@@ -2224,7 +2536,18 @@ document.addEventListener('drop', e => {
 
 // Prevent palette mode "custom" labels from being selectable
 document.getElementById('paletteMode').addEventListener('change', function() {
-  if (this.value === 'custom' || this.value === 'custom2') {
+  if (this.value === 'custom' || this.value === 'custom2' || this.value === 'customImported') {
     this.value = 'none';
   }
 });
+
+// Load custom palettes from localStorage on startup
+loadCustomPalettes();
+(function() {
+  const keys = Object.keys(customPalettes);
+  for (const key of keys) {
+    const pal = customPalettes[key];
+    addCustomPaletteToDropdown(key, pal.name, pal.colors.length);
+  }
+  renderCustomPaletteList();
+})();

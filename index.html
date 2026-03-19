@@ -50,6 +50,23 @@
       <div style="font-size:9px;color:var(--text-dim);margin-top:4px;line-height:1.4" id="filterDesc">
         Averages all source pixels per output cell — clean, balanced.
       </div>
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+        <label class="checkbox-row">
+          <input type="checkbox" id="edgePreserve">
+          <span class="check-box"></span>
+          Edge Preserve
+        </label>
+        <div id="edgePreserveControls" style="display:none">
+          <div class="control-row">
+            <span class="control-label">Edge Sensitivity</span>
+            <span class="control-value" id="edgeSensVal">50%</span>
+          </div>
+          <input type="range" id="edgeSensitivity" min="0" max="100" value="50">
+          <div style="font-size:9px;color:var(--text-dim);margin-top:4px;line-height:1.4">
+            Keeps edges sharp while smooth areas use the chosen filter.
+          </div>
+        </div>
+      </div>
     </details>
 
     <details class="panel-section">
@@ -196,27 +213,33 @@
 
     <details class="panel-section">
       <summary class="section-title">Color Palette</summary>
-      <select id="paletteMode">
-        <option value="none">Full Color (No Restriction)</option>
-        <option value="custom">— Classic Palettes —</option>
-        <option value="pal_gameboy">Game Boy (4 colors)</option>
-        <option value="pal_nes">NES (56 colors)</option>
-        <option value="pal_cga">CGA (16 colors)</option>
-        <option value="pal_c64">C64 (16 colors)</option>
-        <option value="pal_pico8">PICO-8 (16 colors)</option>
-        <option value="pal_sweetie16">Sweetie 16</option>
-        <option value="pal_endesga32">Endesga 32</option>
-        <option value="pal_lospec500">Lospec 500</option>
-        <option value="custom2">— Reduction —</option>
-        <option value="mono">Monochrome (1-bit)</option>
-        <option value="gray4">Grayscale 4</option>
-        <option value="gray8">Grayscale 8</option>
-        <option value="gray16">Grayscale 16</option>
-        <option value="rgb8">RGB 8 (3-3-2)</option>
-        <option value="rgb27">RGB 27 (3×3×3)</option>
-        <option value="rgb64">RGB 64 (4×4×4)</option>
-        <option value="median">Median Cut (auto)</option>
-      </select>
+      <div style="display:flex;gap:6px;align-items:stretch">
+        <select id="paletteMode" style="flex:1">
+          <option value="none">Full Color (No Restriction)</option>
+          <option value="custom">— Classic Palettes —</option>
+          <option value="pal_gameboy">Game Boy (4 colors)</option>
+          <option value="pal_nes">NES (56 colors)</option>
+          <option value="pal_cga">CGA (16 colors)</option>
+          <option value="pal_c64">C64 (16 colors)</option>
+          <option value="pal_pico8">PICO-8 (16 colors)</option>
+          <option value="pal_sweetie16">Sweetie 16</option>
+          <option value="pal_endesga32">Endesga 32</option>
+          <option value="pal_lospec500">Lospec 500</option>
+          <option value="customImported">— Imported —</option>
+          <option value="custom2">— Reduction —</option>
+          <option value="mono">Monochrome (1-bit)</option>
+          <option value="gray4">Grayscale 4</option>
+          <option value="gray8">Grayscale 8</option>
+          <option value="gray16">Grayscale 16</option>
+          <option value="rgb8">RGB 8 (3-3-2)</option>
+          <option value="rgb27">RGB 27 (3×3×3)</option>
+          <option value="rgb64">RGB 64 (4×4×4)</option>
+          <option value="median">Median Cut (auto)</option>
+        </select>
+        <button class="btn btn-import-pal" id="importPaletteBtn" title="Import Lospec/paint.net palette (.txt)">+ PAL</button>
+        <input type="file" id="paletteFileInput" accept=".txt" style="display:none">
+      </div>
+      <div id="customPaletteList" style="margin-top:6px"></div>
       <div id="palettePreview" class="palette-grid" style="margin-top:10px"></div>
       <div id="medianCutControls" style="display:none;margin-top:12px">
         <div class="control-row">
@@ -224,6 +247,29 @@
           <span class="control-value" id="medianVal">16</span>
         </div>
         <input type="range" id="medianColors" min="2" max="64" value="16">
+      </div>
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+        <div class="control-row">
+          <span class="control-label">Harmony</span>
+        </div>
+        <select id="harmonyMode">
+          <option value="none">None</option>
+          <option value="complementary">Complementary</option>
+          <option value="analogous">Analogous</option>
+          <option value="triadic">Triadic</option>
+          <option value="split">Split-Complementary</option>
+          <option value="tetradic">Tetradic</option>
+        </select>
+        <div id="harmonyControls" style="display:none;margin-top:10px">
+          <div class="control-row">
+            <span class="control-label">Harmony Strength</span>
+            <span class="control-value" id="harmonyStrVal">50%</span>
+          </div>
+          <input type="range" id="harmonyStrength" min="0" max="100" value="50">
+          <div style="font-size:9px;color:var(--text-dim);margin-top:4px;line-height:1.4">
+            Nudges palette hues toward harmony positions.
+          </div>
+        </div>
       </div>
     </details>
 
@@ -378,8 +424,7 @@
       <div class="view-toggle">
         <button class="view-btn active" onclick="setView('result', this)">Result</button>
         <button class="view-btn" onclick="setView('original', this)">Original</button>
-        <button class="view-btn" onclick="setView('split', this)">Split</button>
-        <button class="view-btn" onclick="setView('tile', this)">Tile 3×3</button>
+<button class="view-btn" onclick="setView('tile', this)">Tile 3×3</button>
       </div>
       <button class="view-btn active" id="gridToggle" style="display:none" onclick="toggleGrid(this)">Grid</button>
       <div class="sep"></div>
