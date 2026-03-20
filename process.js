@@ -11,6 +11,7 @@ const _snapshotIds = [
   'sharpenAmount','noiseAmount','alphaMode','colorKeyTolerance','lumaThreshold','colorKeyPick',
   'outlineEnabled','outlineThreshold',
   'tileEnabled','tileMethod','blendWidth','edgeMix','edgeMatchEnabled','pyramidLevels',
+  'crossStampEnabled','crossStampDensity','crossStampSize','crossStampOpacity','crossStampCenter',
   'squareCrop','panX','panY','cropZoom',
   'lightNormEnabled','lightNormGrid','lightNormStr',
   'edgePreserve','edgeSensitivity',
@@ -408,12 +409,18 @@ function processImage() {
   const lightNormOn = document.getElementById('lightNormEnabled').checked;
   const lightNormGrid = parseInt(document.getElementById('lightNormGrid').value);
   const lightNormStr = parseInt(document.getElementById('lightNormStr').value) / 100;
+  const crossStampOn = document.getElementById('crossStampEnabled').checked;
+  const crossStampDensity = parseInt(document.getElementById('crossStampDensity').value) / 100;
+  const crossStampSize = parseInt(document.getElementById('crossStampSize').value) / 100;
+  const crossStampOpacity = parseInt(document.getElementById('crossStampOpacity').value) / 100;
+  const crossStampCenter = parseInt(document.getElementById('crossStampCenter').value) / 100;
 
   const preCacheKey = [res, downMethod, squareCrop, panXPct, panYPct, cropZoom,
     tileOn, tileMethod, blendPct,
     tileOn ? document.getElementById('pyramidLevels').value : 0,
     lightNormOn, lightNormGrid, lightNormStr,
-    edgePreserveOn, edgeSensitivity].join('|');
+    edgePreserveOn, edgeSensitivity,
+    crossStampOn, crossStampDensity, crossStampSize, crossStampOpacity, crossStampCenter].join('|');
 
   let d, imgData, smallCanvas, sctx;
 
@@ -451,6 +458,12 @@ function processImage() {
   if (tileOn) {
     tileSource = applyTileBlend(normSource, cw, ch, tileMethod, blendPct,
       parseInt(document.getElementById('pyramidLevels').value));
+  }
+
+  // Pre-processing: Cross-texture stamp (operates at cropped source resolution)
+  if (crossStampOn) {
+    tileSource = applyCrossTextureStamp(tileSource, cw, ch,
+      crossStampDensity, crossStampSize, crossStampOpacity, crossStampCenter);
   }
 
   // Step 1: Downscale with chosen filter

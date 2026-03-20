@@ -179,6 +179,41 @@
         </div>
         <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
           <label class="checkbox-row">
+            <input type="checkbox" id="crossStampEnabled">
+            <span class="check-box"></span>
+            Cross-Texture Stamp
+          </label>
+          <div style="font-size:9px;color:var(--text-dim);margin-top:2px;margin-bottom:6px;line-height:1.4">
+            Stamps interior patches across tile boundaries, wrapping around edges to break up seams.
+          </div>
+          <div id="crossStampControls" style="display:none">
+            <div class="control-row">
+              <span class="control-label">Density</span>
+              <span class="control-value" id="crossStampDensityVal">50%</span>
+            </div>
+            <input type="range" id="crossStampDensity" min="10" max="100" value="50">
+            <div class="control-row" style="margin-top:6px">
+              <span class="control-label">Patch Size</span>
+              <span class="control-value" id="crossStampSizeVal">15%</span>
+            </div>
+            <input type="range" id="crossStampSize" min="5" max="40" value="15">
+            <div class="control-row" style="margin-top:6px">
+              <span class="control-label">Opacity</span>
+              <span class="control-value" id="crossStampOpacityVal">60%</span>
+            </div>
+            <input type="range" id="crossStampOpacity" min="10" max="100" value="60">
+            <div class="control-row" style="margin-top:6px">
+              <span class="control-label">Center Spread</span>
+              <span class="control-value" id="crossStampCenterVal">0%</span>
+            </div>
+            <input type="range" id="crossStampCenter" min="0" max="100" value="0">
+            <div style="font-size:9px;color:var(--text-dim);margin-top:2px;line-height:1.4">
+              Scatter stamps into the interior too.
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+          <label class="checkbox-row">
             <input type="checkbox" id="edgeMatchEnabled" checked>
             <span class="check-box"></span>
             Edge Pixel Match (post-process)

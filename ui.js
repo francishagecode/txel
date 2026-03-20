@@ -126,6 +126,12 @@ function resetAll() {
   document.getElementById('blendWidthWrap').style.display = 'block';
   document.getElementById('pyramidLevelsWrap').style.display = 'none';
   document.getElementById('methodDesc').textContent = 'Wraps edges and cross-fades overlap — smooth, preserves center.';
+  document.getElementById('crossStampEnabled').checked = false;
+  document.getElementById('crossStampControls').style.display = 'none';
+  document.getElementById('crossStampDensity').value = 50;
+  document.getElementById('crossStampSize').value = 15;
+  document.getElementById('crossStampOpacity').value = 60;
+  document.getElementById('crossStampCenter').value = 0;
   document.getElementById('squareCrop').checked = false;
   document.getElementById('cropControls').style.display = 'none';
   document.getElementById('panX').value = 50;
@@ -197,6 +203,10 @@ function updateAllLabels() {
   document.getElementById('lightNormStrVal').textContent = document.getElementById('lightNormStr').value + '%';
   document.getElementById('edgeSensVal').textContent = document.getElementById('edgeSensitivity').value + '%';
   document.getElementById('harmonyStrVal').textContent = document.getElementById('harmonyStrength').value + '%';
+  document.getElementById('crossStampDensityVal').textContent = document.getElementById('crossStampDensity').value + '%';
+  document.getElementById('crossStampSizeVal').textContent = document.getElementById('crossStampSize').value + '%';
+  document.getElementById('crossStampOpacityVal').textContent = document.getElementById('crossStampOpacity').value + '%';
+  document.getElementById('crossStampCenterVal').textContent = document.getElementById('crossStampCenter').value + '%';
 }
 
 // ===================== EVENT LISTENERS =====================
@@ -212,7 +222,7 @@ function processDebounced() {
   });
 }
 
-const sliderIds = ['resolution','ditherStrength','brightness','contrast','saturation','hueShift','outlineThreshold','medianColors','blendWidth','edgeMix','panX','panY','pyramidLevels','cropZoom','sharpenAmount','noiseAmount','colorKeyTolerance','lumaThreshold','lightNormGrid','lightNormStr','edgeSensitivity','harmonyStrength'];
+const sliderIds = ['resolution','ditherStrength','brightness','contrast','saturation','hueShift','outlineThreshold','medianColors','blendWidth','edgeMix','panX','panY','pyramidLevels','cropZoom','sharpenAmount','noiseAmount','colorKeyTolerance','lumaThreshold','lightNormGrid','lightNormStr','edgeSensitivity','harmonyStrength','crossStampDensity','crossStampSize','crossStampOpacity','crossStampCenter'];
 sliderIds.forEach(id => {
   const el = document.getElementById(id);
   if (!el) return;
@@ -350,6 +360,12 @@ document.getElementById('lightNormEnabled').addEventListener('change', () => {
 document.getElementById('tileEnabled').addEventListener('change', () => {
   document.getElementById('tileControls').style.display =
     document.getElementById('tileEnabled').checked ? 'block' : 'none';
+  processImage();
+});
+
+document.getElementById('crossStampEnabled').addEventListener('change', () => {
+  document.getElementById('crossStampControls').style.display =
+    document.getElementById('crossStampEnabled').checked ? 'block' : 'none';
   processImage();
 });
 

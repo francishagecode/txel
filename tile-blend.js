@@ -1045,6 +1045,192 @@ function applyLightingNormalize(src, w, h, gridSize, strength) {
   return imageDataToCanvas(imgData);
 }
 
+// === CROSS-TEXTURE STAMP ===
+// Stamps interior patches across tile boundaries (wrapping around edges) to
+// disguise where one tile copy ends and the next begins.
+// Patches are centered ON the texture edges and wrap, so they literally
+// straddle two adjacent tile copies.
+function applyCrossTextureStamp(src, w, h, density, patchPct, opacity, centerSpread) {
+  const imgData = getSourceData(src, w, h);
+  const orig = new Uint8ClampedArray(imgData.data);
+  const d = imgData.data;
+
+  const minDim = Math.min(w, h);
+  const patchSize = Math.max(3, Math.floor(minDim * patchPct));
+  const halfPatch = Math.floor(patchSize / 2);
+
+  // Deterministic RNG
+  let seed = 57721;
+  function rand() {
+    seed = (seed * 16807 + 0) % 2147483647;
+    return seed / 2147483647;
+  }
+
+  // Luminance + variance for a patch region (with wrapping)
+  function patchStats(data, px, py) {
+    let sumL = 0, sumL2 = 0, count = 0;
+    for (let dy = 0; dy < patchSize; dy++) {
+      for (let dx = 0; dx < patchSize; dx++) {
+        const x = ((px + dx) % w + w) % w;
+        const y = ((py + dy) % h + h) % h;
+        const i = (y * w + x) * 4;
+        const l = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+        sumL += l;
+        sumL2 += l * l;
+        count++;
+      }
+    }
+    const mean = sumL / count;
+    return { mean, variance: sumL2 / count - mean * mean };
+  }
+
+  // Interior region for sourcing patches (center of texture, away from edges)
+  const margin = Math.max(patchSize, Math.floor(minDim * 0.2));
+  const srcLeft = margin, srcTop = margin;
+  const srcRight = w - margin, srcBot = h - margin;
+
+  if (srcRight <= srcLeft || srcBot <= srcTop) {
+    return src; // image too small
+  }
+
+  // Build candidate pool from interior
+  const numCandidates = Math.min(64, Math.max(16, Math.floor(
+    Math.sqrt((w * h) / (patchSize * patchSize)) * 4)));
+  const candidates = [];
+  for (let i = 0; i < numCandidates; i++) {
+    const cx = Math.floor(srcLeft + rand() * (srcRight - srcLeft - patchSize));
+    const cy = Math.floor(srcTop + rand() * (srcBot - srcTop - patchSize));
+    candidates.push({ x: cx, y: cy, ...patchStats(orig, cx, cy) });
+  }
+
+  // Place stamps along all 4 edges.
+  // Density controls how many stamps per edge and how much jitter off the edge.
+  // At each edge, stamps are centered right on the boundary (x=0, x=w-1, y=0, y=h-1)
+  // with some random offset so they straddle the seam.
+  const stepSize = Math.max(2, Math.floor(patchSize * (1.1 - density * 0.6)));
+  // How far off the exact edge line a stamp center can drift (in pixels)
+  const jitter = Math.floor(halfPatch * density);
+
+  // Edges: [start coord, end coord, is-horizontal, edge-position]
+  const edges = [
+    { len: w, horiz: true,  pos: 0 },     // top edge (y=0)
+    { len: w, horiz: true,  pos: h - 1 },  // bottom edge (y=h-1)
+    { len: h, horiz: false, pos: 0 },      // left edge (x=0)
+    { len: h, horiz: false, pos: w - 1 },  // right edge (x=w-1)
+  ];
+
+  for (const edge of edges) {
+    for (let along = -halfPatch; along < edge.len + halfPatch; along += stepSize) {
+      // Random jitter along and perpendicular to the edge
+      const jitterAlong = Math.floor((rand() - 0.5) * stepSize * 0.8);
+      const jitterPerp = Math.floor((rand() - 0.5) * 2 * jitter);
+
+      let tx, ty;
+      if (edge.horiz) {
+        tx = along + jitterAlong - halfPatch;
+        ty = edge.pos + jitterPerp - halfPatch;
+      } else {
+        ty = along + jitterAlong - halfPatch;
+        tx = edge.pos + jitterPerp - halfPatch;
+      }
+
+      // Find best matching candidate by luminance + variance
+      const target = patchStats(d, tx, ty);
+      let bestIdx = 0, bestScore = Infinity;
+      for (let c = 0; c < candidates.length; c++) {
+        const meanDiff = Math.abs(candidates[c].mean - target.mean);
+        const varDiff = Math.abs(Math.sqrt(Math.max(0, candidates[c].variance)) -
+                                 Math.sqrt(Math.max(0, target.variance)));
+        const score = meanDiff + varDiff * 0.5;
+        if (score < bestScore) { bestScore = score; bestIdx = c; }
+      }
+
+      const srcPatch = candidates[bestIdx];
+
+      // Stamp with radial cosine falloff, writing with wrapping
+      for (let dy = 0; dy < patchSize; dy++) {
+        for (let dx = 0; dx < patchSize; dx++) {
+          // Wrap destination coordinates so stamps cross tile boundaries
+          const dstX = ((tx + dx) % w + w) % w;
+          const dstY = ((ty + dy) % h + h) % h;
+
+          const srcX = srcPatch.x + dx;
+          const srcY = srcPatch.y + dy;
+          if (srcX >= w || srcY >= h) continue;
+
+          // Radial falloff from patch center
+          const pcx = (dx - halfPatch) / halfPatch;
+          const pcy = (dy - halfPatch) / halfPatch;
+          const pDist = Math.sqrt(pcx * pcx + pcy * pcy);
+          if (pDist > 1) continue;
+
+          const alpha = (0.5 + 0.5 * Math.cos(pDist * Math.PI)) * opacity;
+          if (alpha < 0.003) continue;
+
+          const si = (srcY * w + srcX) * 4;
+          const di = (dstY * w + dstX) * 4;
+
+          for (let ch = 0; ch < 3; ch++) {
+            d[di + ch] = Math.round(d[di + ch] * (1 - alpha) + orig[si + ch] * alpha);
+          }
+        }
+      }
+    }
+  }
+
+  // Optional: scatter stamps across the interior too
+  if (centerSpread > 0) {
+    const interiorArea = (srcRight - srcLeft) * (srcBot - srcTop);
+    const numInterior = Math.max(2, Math.floor(
+      interiorArea * centerSpread * 1.5 / (patchSize * patchSize)));
+
+    for (let s = 0; s < numInterior; s++) {
+      const tx = Math.floor(srcLeft + rand() * (srcRight - srcLeft - patchSize));
+      const ty = Math.floor(srcTop + rand() * (srcBot - srcTop - patchSize));
+
+      const target = patchStats(d, tx, ty);
+      let bestIdx = 0, bestScore = Infinity;
+      for (let c = 0; c < candidates.length; c++) {
+        const meanDiff = Math.abs(candidates[c].mean - target.mean);
+        const varDiff = Math.abs(Math.sqrt(Math.max(0, candidates[c].variance)) -
+                                 Math.sqrt(Math.max(0, target.variance)));
+        const score = meanDiff + varDiff * 0.5;
+        if (score < bestScore) { bestScore = score; bestIdx = c; }
+      }
+
+      const srcPatch = candidates[bestIdx];
+      const interiorOpacity = opacity * centerSpread;
+
+      for (let dy = 0; dy < patchSize; dy++) {
+        for (let dx = 0; dx < patchSize; dx++) {
+          const dstX = tx + dx, dstY = ty + dy;
+          if (dstX < 0 || dstX >= w || dstY < 0 || dstY >= h) continue;
+
+          const srcX = srcPatch.x + dx, srcY = srcPatch.y + dy;
+          if (srcX >= w || srcY >= h) continue;
+
+          const pcx = (dx - halfPatch) / halfPatch;
+          const pcy = (dy - halfPatch) / halfPatch;
+          const pDist = Math.sqrt(pcx * pcx + pcy * pcy);
+          if (pDist > 1) continue;
+
+          const alpha = (0.5 + 0.5 * Math.cos(pDist * Math.PI)) * interiorOpacity;
+          if (alpha < 0.003) continue;
+
+          const si = (srcY * w + srcX) * 4;
+          const di = (dstY * w + dstX) * 4;
+
+          for (let ch = 0; ch < 3; ch++) {
+            d[di + ch] = Math.round(d[di + ch] * (1 - alpha) + orig[si + ch] * alpha);
+          }
+        }
+      }
+    }
+  }
+
+  return imageDataToCanvas(imgData);
+}
+
 // Dispatcher
 function applyTileBlend(src, w, h, method, blendPct, pyramidLevels) {
   switch (method) {
