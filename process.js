@@ -968,9 +968,15 @@ function processImage() {
   lastSmallCanvas = smallCanvas;
   const outCanvas = document.getElementById('outputCanvas');
 
+  // Compute available space from container
+  const container = document.getElementById('canvasContainer');
+  const availW = container.clientWidth - 32;  // padding
+  const availH = container.clientHeight - 32;
+
   if (currentView === 'tile') {
-    // 3×3 tile preview
-    const tileScale = Math.max(1, Math.floor(192 / Math.max(tw, th)));
+    // 3×3 tile preview — fit 3 tiles into available space
+    const maxTileDim = Math.min(availW / 3, availH / 3);
+    const tileScale = Math.max(1, Math.floor(maxTileDim / Math.max(tw, th)));
     const tilePx = tw * tileScale;
     const tilePy = th * tileScale;
     outCanvas.width = tilePx * 3;
@@ -998,8 +1004,8 @@ function processImage() {
       }
     }
   } else {
-    // Normal single-tile view
-    const maxDim = 512;
+    // Normal single-tile view — fill available space
+    const maxDim = Math.min(availW, availH);
     let scale = Math.max(1, Math.floor(maxDim / Math.max(tw, th)));
     const ow = tw * scale;
     const oh = th * scale;
@@ -1013,9 +1019,10 @@ function processImage() {
   // Update info
   document.getElementById('infoSrc').textContent = `${sw}×${sh}`;
   document.getElementById('infoOut').textContent = `${tw}×${th}`;
+  const displayMaxDim = Math.min(availW, availH);
   const displayScale = currentView === 'tile'
-    ? Math.max(1, Math.floor(192 / Math.max(tw, th)))
-    : Math.max(1, Math.floor(512 / Math.max(tw, th)));
+    ? Math.max(1, Math.floor(Math.min(availW / 3, availH / 3) / Math.max(tw, th)))
+    : Math.max(1, Math.floor(displayMaxDim / Math.max(tw, th)));
   const viewLabel = currentView === 'tile' ? `${displayScale}× tile 3×3` : `${displayScale}× display`;
   document.getElementById('canvasInfo').textContent = `${sw}×${sh} → ${tw}×${th} (${viewLabel})`;
 

@@ -19,8 +19,10 @@ function setView(mode, el) {
     const ctx = outCanvas.getContext('2d');
     const sw = sourceImage.naturalWidth || sourceImage.width;
     const sh = sourceImage.naturalHeight || sourceImage.height;
-    const maxDim = 512;
-    const scale = Math.min(maxDim / sw, maxDim / sh, 1);
+    const container = document.getElementById('canvasContainer');
+    const maxW = container.clientWidth - 32;
+    const maxH = container.clientHeight - 32;
+    const scale = Math.min(maxW / sw, maxH / sh, 1);
     outCanvas.width = Math.round(sw * scale);
     outCanvas.height = Math.round(sh * scale);
     ctx.imageSmoothingEnabled = true;

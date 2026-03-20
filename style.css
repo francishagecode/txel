@@ -290,8 +290,6 @@ select:focus { border-color: var(--accent); }
 
 canvas {
   image-rendering: pixelated;
-  max-width: 100%;
-  max-height: calc(100vh - 130px);
   box-shadow: 0 0 60px rgba(0,0,0,0.5);
 }
 canvas.pannable { cursor: grab; }

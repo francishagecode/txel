@@ -1,5 +1,5 @@
 // ===================== STATE =====================
-const RES_STEPS = [8, 16, 32, 64, 128, 256, 512];
+const RES_STEPS = [8, 16, 32, 64, 128, 256, 512, 1024];
 function getResolution() { return RES_STEPS[parseInt(document.getElementById('resolution').value)]; }
 
 let sourceImage = null;
