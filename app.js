@@ -2343,6 +2343,26 @@ function processDebounced() {
   });
 }
 
+// Throttled process for panning/zooming — limits redraws during drag
+let _panThrottleTimer = null;
+let _panQueued = false;
+const PAN_THROTTLE_MS = 50;
+function processPanThrottled() {
+  if (_panThrottleTimer) {
+    _panQueued = true;
+    return;
+  }
+  processImage();
+  _panThrottleTimer = setTimeout(() => {
+    _panThrottleTimer = null;
+    if (_panQueued) {
+      _panQueued = false;
+      processImage();
+      schedulePushUndo();
+    }
+  }, PAN_THROTTLE_MS);
+}
+
 const sliderIds = ['resolution','ditherStrength','brightness','contrast','saturation','hueShift','outlineThreshold','medianColors','blendWidth','edgeMix','panX','panY','pyramidLevels','cropZoom','sharpenAmount','noiseAmount','colorKeyTolerance','lumaThreshold','lightNormGrid','lightNormStr','edgeSensitivity','harmonyStrength'];
 sliderIds.forEach(id => {
   const el = document.getElementById(id);
@@ -2452,10 +2472,17 @@ document.getElementById('squareCrop').addEventListener('change', () => {
     document.getElementById('panX').value = newX;
     document.getElementById('panY').value = newY;
     updateAllLabels();
-    processDebounced();
+    processPanThrottled();
   });
 
-  window.addEventListener('mouseup', () => { dragging = false; });
+  window.addEventListener('mouseup', () => {
+    if (dragging) {
+      dragging = false;
+      // Final crisp render at rest position
+      processImage();
+      schedulePushUndo();
+    }
+  });
 
   // Scroll to zoom
   canvas.addEventListener('wheel', e => {
@@ -2468,7 +2495,7 @@ document.getElementById('squareCrop').addEventListener('change', () => {
     val = Math.max(100, Math.min(500, val + step));
     zoomEl.value = val;
     updateAllLabels();
-    processDebounced();
+    processPanThrottled();
   }, { passive: false });
 })();
 
