@@ -90,7 +90,7 @@ function exportImage(mode) {
   if (mode === 'download') {
     const link = document.createElement('a');
     const res = getResolution();
-    link.download = `pxl8_${res}x${res}.png`;
+    link.download = `txel_${res}x${res}.png`;
     link.href = exportCanvas.toDataURL('image/png');
     link.click();
   } else {
