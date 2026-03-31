@@ -76,6 +76,21 @@ body {
   color: var(--accent);
   text-shadow: 0 0 20px var(--accent-glow);
   display: flex; align-items: center; gap: 10px;
+  text-decoration: none;
+}
+.logo-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+}
+.logo-sub {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 3px;
+  color: var(--accent-dim);
+  opacity: 0.6;
+  margin-top: 2px;
 }
 
 .logo-icon {
