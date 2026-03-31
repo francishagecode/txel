@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TXEL — Palette Extract</title>
+<link rel="stylesheet" href="style.css">
+<style>
+.drop-zone.hidden { display: none; }
+.drop-zone.dragover .drop-zone-border { border-color: var(--accent); background: var(--accent-glow); }
+.spinner {
+  width: 20px; height: 20px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: none;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+#displayImg {
+  max-width: 100%;
+  max-height: 100%;
+  display: none;
+  image-rendering: auto;
+  box-shadow: 0 0 60px rgba(0,0,0,0.5);
+}
+.dot {
+  position: absolute;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.5);
+  cursor: grab;
+  z-index: 20;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+.dot:hover { transform: scale(1.25); }
+.dot.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow), 0 0 12px var(--accent-glow);
+  transform: scale(1.2);
+}
+.color-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.color-item:last-child { border-bottom: none; }
+.color-item:hover { background: rgba(255,255,255,0.02); }
+.color-item.selected .hex-val { color: var(--accent); }
+.color-item.selected .swatch-box { box-shadow: 0 0 0 1px var(--accent); }
+.swatch-box { width: 28px; height: 28px; border: 1px solid var(--border-hi); flex-shrink: 0; }
+.swatch-box.empty { background: var(--surface3); border-style: dashed; }
+.hex-val { font-size: 12px; color: var(--text); letter-spacing: 1px; text-transform: uppercase; }
+.hex-val.empty { color: var(--text-dim); }
+.rgb-val { font-size: 9px; color: var(--text-dim); margin-top: 2px; }
+.copy-indicator { margin-left: auto; font-size: 10px; color: var(--text-dim); opacity: 0; transition: opacity 0.15s; }
+.color-item:hover .copy-indicator { opacity: 0.4; }
+.copy-indicator.done { opacity: 1 !important; color: var(--accent); }
+.tips-list { font-size: 10px; color: var(--text-dim); line-height: 2; }
+.harmony-strip { display: flex; height: 32px; margin-top: 8px; border: 1px solid var(--border); overflow: hidden; }
+.harmony-cell { flex: 1; }
+canvas#hiddenCanvas { display: none; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">
+    <div class="logo-icon"></div>
+    TXEL
+  </div>
+  <nav class="site-nav">
+    <a href="index.html">Texture</a>
+    <a href="extract.html" class="active">Extract</a>
+    <a href="designer.html">Designer</a>
+  </nav>
+  <div class="header-actions">
+    <button class="btn btn-primary" id="topUploadBtn">Load Image</button>
+    <button class="btn" id="resetBtn">Reset</button>
+  </div>
+</div>
+
+<div class="app-layout">
+
+  <div class="panel">
+
+    <details class="panel-section" open>
+      <summary><span class="section-title">Extracted Colors</span></summary>
+      <div id="colorList"></div>
+    </details>
+    <details class="panel-section" open>
+      <summary><span class="section-title">Image Info</span></summary>
+      <div class="info-grid">
+        <div class="info-item"><div class="info-label">Width</div><div class="info-value" id="infoW">—</div></div>
+        <div class="info-item"><div class="info-label">Height</div><div class="info-value" id="infoH">—</div></div>
+        <div class="info-item"><div class="info-label">Colors</div><div class="info-value" id="infoC">—</div></div>
+        <div class="info-item"><div class="info-label">File</div><div class="info-value" id="infoF" style="font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">—</div></div>
+      </div>
+    </details>
+    <details class="panel-section">
+      <summary><span class="section-title">Tips</span></summary>
+      <div class="tips-list">
+        • Click any swatch to copy hex<br>
+        • Drag dots to re-sample color<br>
+        • Drop any image to reload<br>
+        • 5 dominant colors extracted<br>
+        • Click color block to adjust
+      </div>
+    </details>
+  </div>
+
+  <div class="canvas-area">
+    <div class="canvas-toolbar">
+      <span id="statusText" style="color:var(--text-dim)">No image loaded</span>
+      <div class="sep"></div>
+      <span id="statusDims"></span>
+    </div>
+    <div class="canvas-container" id="canvasContainer">
+      <div class="drop-zone" id="dropZone">
+        <div class="drop-zone-border">
+          <div class="drop-icon">⬚</div>
+          <div class="spinner" id="spinner"></div>
+          <div class="drop-text">Drop image here</div>
+          <div class="drop-sub">or click to browse — PNG, JPG, BMP, WebP</div>
+        </div>
+      </div>
+      <img id="displayImg" alt="">
+    </div>
+  </div>
+
+  <div class="panel">
+    <details class="panel-section" open>
+      <summary><span class="section-title">Palette Strip</span></summary>
+      <div class="harmony-strip" id="harmonyStrip">
+        <div class="harmony-cell" style="background:var(--surface3)"></div>
+        <div class="harmony-cell" style="background:var(--surface3)"></div>
+        <div class="harmony-cell" style="background:var(--surface3)"></div>
+        <div class="harmony-cell" style="background:var(--surface3)"></div>
+        <div class="harmony-cell" style="background:var(--surface3)"></div>
+      </div>
+    </details>
+    <details class="panel-section" open>
+      <summary><span class="section-title">Color Details</span></summary>
+      <div id="detailPanel" style="font-size:10px;color:var(--text-dim);line-height:2">
+        Select a color to see details.
+      </div>
+    </details>
+    <details class="panel-section" open>
+      <summary><span class="section-title">Export</span></summary>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <button class="btn" style="width:100%" id="exportTextBtn">Copy as Text</button>
+        <button class="btn" style="width:100%" id="exportCSSBtn">Copy as CSS Vars</button>
+        <button class="btn" style="width:100%" id="exportArrayBtn">Copy as JS Array</button>
+      </div>
+    </details>
+  </div>
+
+</div>
+
+<input type="file" id="fileInput" accept="image/*" style="display:none">
+<canvas id="hiddenCanvas"></canvas>
+
+<script>
+const fileInput      = document.getElementById('fileInput');
+const dropZone       = document.getElementById('dropZone');
+const displayImg     = document.getElementById('displayImg');
+const colorList      = document.getElementById('colorList');
+const spinner        = document.getElementById('spinner');
+const statusText     = document.getElementById('statusText');
+const statusDims     = document.getElementById('statusDims');
+const infoW          = document.getElementById('infoW');
+const infoH          = document.getElementById('infoH');
+const infoC          = document.getElementById('infoC');
+const infoF          = document.getElementById('infoF');
+const harmonyStrip   = document.getElementById('harmonyStrip');
+const detailPanel    = document.getElementById('detailPanel');
+const canvas         = document.getElementById('hiddenCanvas');
+const ctx            = canvas.getContext('2d');
+const canvasContainer = document.getElementById('canvasContainer');
+
+let img = null, colors = [], dots = [];
+
+function renderPlaceholders() {
+  colorList.innerHTML = '';
+  for (let i = 0; i < 5; i++) {
+    const el = document.createElement('div');
+    el.className = 'color-item';
+    el.innerHTML = `<div class="swatch-box empty"></div><div><div class="hex-val empty">#------</div><div class="rgb-val">RGB(—,—,—)</div></div>`;
+    colorList.appendChild(el);
+  }
+}
+renderPlaceholders();
+
+document.getElementById('topUploadBtn').addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => { if (e.target.files[0]) loadFile(e.target.files[0]); });
+
+['dragenter','dragover'].forEach(ev => dropZone.addEventListener(ev, e => { e.preventDefault(); dropZone.classList.add('dragover'); }));
+['dragleave','drop'].forEach(ev => dropZone.addEventListener(ev, e => { e.preventDefault(); dropZone.classList.remove('dragover'); }));
+dropZone.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f?.type.startsWith('image/')) loadFile(f); });
+canvasContainer.addEventListener('dragover', e => e.preventDefault());
+canvasContainer.addEventListener('drop', e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f?.type.startsWith('image/')) loadFile(f); });
+
+function loadFile(file) {
+  spinner.style.display = 'block';
+  dropZone.querySelector('.drop-text').textContent = 'Processing…';
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const i = new Image();
+    i.onload = () => {
+      img = i;
+      canvas.width = i.width; canvas.height = i.height;
+      ctx.fillStyle = '#fff'; ctx.fillRect(0,0,i.width,i.height);
+      ctx.drawImage(i,0,0);
+      displayImg.src = i.src;
+      displayImg.style.display = 'block';
+      dropZone.classList.add('hidden');
+      spinner.style.display = 'none';
+      infoW.textContent = i.width;
+      infoH.textContent = i.height;
+      infoF.textContent = file.name.length > 12 ? file.name.slice(0,10)+'…' : file.name;
+      statusText.textContent = 'Image loaded';
+      statusText.style.color = 'var(--text)';
+      statusDims.textContent = `${i.width} × ${i.height} px`;
+      colors = extractColors(i, 5);
+      infoC.textContent = colors.length;
+      renderSwatches(colors);
+      updateHarmonyStrip(colors);
+      clearDots();
+      requestAnimationFrame(() => placeDots(colors));
+    };
+    i.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+const cdist = (a,b) => Math.sqrt((a[0]-b[0])**2+(a[1]-b[1])**2+(a[2]-b[2])**2);
+
+function extractColors(im, k) {
+  const data = ctx.getImageData(0,0,im.width,im.height).data;
+  const W = im.width, H = im.height;
+  const px = [], pos = [];
+  for (let y=0;y<H;y+=4) for (let x=0;x<W;x+=4) {
+    const idx=(y*W+x)*4;
+    px.push([data[idx],data[idx+1],data[idx+2]]);
+    pos.push({x,y});
+  }
+  let cents = [px[Math.floor(Math.random()*px.length)].slice()];
+  while (cents.length < k) {
+    let best=null, bd=-1;
+    for (let t=0;t<40;t++) {
+      const c = px[Math.floor(Math.random()*px.length)];
+      const d = Math.min(...cents.map(ce=>cdist(c,ce)));
+      if (d>bd){bd=d;best=c;}
+    }
+    cents.push(best.slice());
+  }
+  const asgn = new Array(px.length);
+  for (let iter=0;iter<15;iter++) {
+    const clusters = Array.from({length:k},()=>[]);
+    px.forEach((p,pi) => {
+      let md=Infinity,cl=0;
+      cents.forEach((c,ci)=>{const d=cdist(p,c);if(d<md){md=d;cl=ci;}});
+      clusters[cl].push(p); asgn[pi]=cl;
+    });
+    cents = clusters.map((cl,ci)=>{
+      if(!cl.length) return cents[ci];
+      const s=cl.reduce((a,p)=>[a[0]+p[0],a[1]+p[1],a[2]+p[2]],[0,0,0]);
+      return [s[0]/cl.length|0,s[1]/cl.length|0,s[2]/cl.length|0];
+    });
+  }
+  return cents.map((rgb,ci)=>{
+    let bp=pos[0],md=Infinity;
+    px.forEach((p,pi)=>{if(asgn[pi]!==ci)return;const d=cdist(p,rgb);if(d<md){md=d;bp=pos[pi];}});
+    const hex='#'+rgb.map(v=>v.toString(16).padStart(2,'0')).join('');
+    return {r:rgb[0],g:rgb[1],b:rgb[2],hex,pos:bp};
+  });
+}
+
+function renderSwatches(cols) {
+  colorList.innerHTML = '';
+  cols.forEach((c, colorIdx) => {
+    const el = document.createElement('div');
+    el.className = 'color-item';
+    el.dataset.idx = colorIdx;
+    el.innerHTML = `
+      <div class="swatch-box" style="background:${c.hex}"></div>
+      <div>
+        <div class="hex-val">${c.hex.toUpperCase()}</div>
+        <div class="rgb-val">RGB(${c.r}, ${c.g}, ${c.b})</div>
+      </div>
+      <div class="copy-indicator">⎘</div>`;
+    el.addEventListener('click', () => copyHex(c.hex, el));
+    el.addEventListener('mousedown', () => highlight(colorIdx));
+    el.addEventListener('mouseup', clearHighlight);
+    colorList.appendChild(el);
+  });
+}
+
+async function copyHex(hex, el) {
+  try { await navigator.clipboard.writeText(hex); }
+  catch { const t=document.createElement('textarea');t.value=hex;document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t); }
+  const ind = el.querySelector('.copy-indicator');
+  ind.textContent='✓'; ind.classList.add('done');
+  setTimeout(()=>{ind.textContent='⎘';ind.classList.remove('done');},1400);
+}
+
+function updateHarmonyStrip(cols) {
+  harmonyStrip.innerHTML = '';
+  if (!cols.length) {
+    for (let i=0;i<5;i++) { const d=document.createElement('div'); d.className='harmony-cell'; d.style.background='var(--surface3)'; harmonyStrip.appendChild(d); }
+    return;
+  }
+  cols.forEach(c => {
+    const cell = document.createElement('div');
+    cell.className = 'harmony-cell';
+    cell.style.background = c.hex;
+    harmonyStrip.appendChild(cell);
+  });
+}
+
+function showDetail(c, colorIdx) {
+  const lum = (0.299*c.r + 0.587*c.g + 0.114*c.b)/255;
+  detailPanel.innerHTML = `
+    <div style="position:relative;width:100%;height:48px;margin-bottom:10px;cursor:pointer;title='Click to adjust color'">
+      <div id="detailSwatch" style="width:100%;height:100%;background:${c.hex};border:1px solid var(--border)"></div>
+      <input type="color" id="colorPicker" value="${c.hex}" style="position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:none;padding:0">
+    </div>
+    <div class="info-grid">
+      <div class="info-item"><div class="info-label">Hex</div><div class="info-value" style="font-size:11px">${c.hex.toUpperCase()}</div></div>
+      <div class="info-item"><div class="info-label">Lum</div><div class="info-value" style="font-size:11px">${(lum*100).toFixed(0)}%</div></div>
+      <div class="info-item"><div class="info-label">R</div><div class="info-value">${c.r}</div></div>
+      <div class="info-item"><div class="info-label">G</div><div class="info-value">${c.g}</div></div>
+      <div class="info-item"><div class="info-label">B</div><div class="info-value">${c.b}</div></div>
+      <div class="info-item"><div class="info-label">Tone</div><div class="info-value" style="font-size:10px">${lum>0.7?'Light':lum<0.3?'Dark':'Mid'}</div></div>
+    </div>`;
+
+  document.getElementById('colorPicker').addEventListener('input', e => {
+    const hex = e.target.value;
+    const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+    colors[colorIdx] = {...colors[colorIdx], r, g, b, hex};
+    document.getElementById('detailSwatch').style.background = hex;
+    renderSwatches(colors);
+    updateHarmonyStrip(colors);
+    if (dots[colorIdx]) dots[colorIdx].style.background = hex;
+    // re-render detail with updated color but keep picker open
+    const lum2 = (0.299*r + 0.587*g + 0.114*b)/255;
+    detailPanel.querySelector('.info-grid').innerHTML = `
+      <div class="info-item"><div class="info-label">Hex</div><div class="info-value" style="font-size:11px">${hex.toUpperCase()}</div></div>
+      <div class="info-item"><div class="info-label">Lum</div><div class="info-value" style="font-size:11px">${(lum2*100).toFixed(0)}%</div></div>
+      <div class="info-item"><div class="info-label">R</div><div class="info-value">${r}</div></div>
+      <div class="info-item"><div class="info-label">G</div><div class="info-value">${g}</div></div>
+      <div class="info-item"><div class="info-label">B</div><div class="info-value">${b}</div></div>
+      <div class="info-item"><div class="info-label">Tone</div><div class="info-value" style="font-size:10px">${lum2>0.7?'Light':lum2<0.3?'Dark':'Mid'}</div></div>`;
+  });
+}
+
+function highlight(colorIdx) {
+  clearHighlight();
+  document.querySelectorAll('.color-item')[colorIdx]?.classList.add('selected');
+  dots[colorIdx]?.classList.add('selected');
+  if (colors[colorIdx]) showDetail(colors[colorIdx], colorIdx);
+}
+function clearHighlight() {
+  document.querySelectorAll('.color-item.selected').forEach(e=>e.classList.remove('selected'));
+  document.querySelectorAll('.dot.selected').forEach(d=>d.classList.remove('selected'));
+}
+
+function clearDots() { dots.forEach(d=>d.remove()); dots=[]; }
+
+function placeDots(cols) {
+  const ir = displayImg.getBoundingClientRect();
+  const cr = canvasContainer.getBoundingClientRect();
+  if (!ir.width) return;
+  const sx=ir.width/img.width, sy=ir.height/img.height;
+  const ox=ir.left-cr.left, oy=ir.top-cr.top;
+  cols.forEach((c, colorIdx) => {
+    const dot = document.createElement('div');
+    dot.className = 'dot';
+    dot.style.background = c.hex;
+    dot.style.left = (ox + c.pos.x*sx - 13)+'px';
+    dot.style.top  = (oy + c.pos.y*sy - 13)+'px';
+    dot.dataset.idx = colorIdx;
+    makeDraggable(dot, colorIdx);
+    canvasContainer.appendChild(dot);
+    dots.push(dot);
+  });
+}
+
+function makeDraggable(dot, colorIdx) {
+  let drag=false, sx,sy,sl,st;
+  dot.addEventListener('mousedown', e => {
+    e.preventDefault(); e.stopPropagation();
+    drag=true; sx=e.clientX; sy=e.clientY;
+    sl=parseInt(dot.style.left); st=parseInt(dot.style.top);
+    highlight(colorIdx);
+    document.addEventListener('mousemove', mv);
+    document.addEventListener('mouseup', mu);
+    document.body.style.userSelect='none';
+  });
+  const mv = e => {
+    if (!drag) return;
+    dot.style.left = (sl + e.clientX - sx)+'px';
+    dot.style.top  = (st + e.clientY - sy)+'px';
+    resample(dot, colorIdx);
+  };
+  const mu = () => {
+    drag=false; clearHighlight();
+    document.removeEventListener('mousemove', mv);
+    document.removeEventListener('mouseup', mu);
+    document.body.style.userSelect='';
+  };
+  dot.addEventListener('dragstart', e => e.preventDefault());
+}
+
+function resample(dot, colorIdx) {
+  const ir = displayImg.getBoundingClientRect();
+  const cr = canvasContainer.getBoundingClientRect();
+  const sx = img.width/ir.width, sy = img.height/ir.height;
+  const ox = ir.left-cr.left, oy = ir.top-cr.top;
+  const px = Math.max(0,Math.min(img.width-1,  (parseInt(dot.style.left)+13-ox)*sx))|0;
+  const py = Math.max(0,Math.min(img.height-1, (parseInt(dot.style.top) +13-oy)*sy))|0;
+  const d = ctx.getImageData(px,py,1,1).data;
+  const hex = '#'+[d[0],d[1],d[2]].map(v=>v.toString(16).padStart(2,'0')).join('');
+  colors[colorIdx] = {r:d[0],g:d[1],b:d[2],hex,pos:{x:px,y:py}};
+  dot.style.background = hex;
+  renderSwatches(colors);
+  updateHarmonyStrip(colors);
+  highlight(colorIdx);
+}
+
+
+document.getElementById('exportTextBtn').addEventListener('click',()=>{
+  if(!colors.length)return;
+  navigator.clipboard.writeText(colors.map(c=>c.hex.toUpperCase()).join('\n')).catch(()=>{});
+});
+document.getElementById('exportCSSBtn').addEventListener('click',()=>{
+  if(!colors.length)return;
+  const txt=':root {\n'+colors.map((c,i)=>`  --color-${i+1}: ${c.hex.toUpperCase()};`).join('\n')+'\n}';
+  navigator.clipboard.writeText(txt).catch(()=>{});
+});
+document.getElementById('exportArrayBtn').addEventListener('click',()=>{
+  if(!colors.length)return;
+  const txt='const palette = [\n'+colors.map(c=>`  "${c.hex.toUpperCase()}"`).join(',\n')+'\n];';
+  navigator.clipboard.writeText(txt).catch(()=>{});
+});
+document.getElementById('resetBtn').addEventListener('click',()=>{
+  img=null;colors=[];clearDots();
+  displayImg.style.display='none';
+  dropZone.classList.remove('hidden');
+  dropZone.querySelector('.drop-text').textContent='Drop image here';
+  renderPlaceholders();
+  updateHarmonyStrip([]);
+  detailPanel.innerHTML='Select a color to see details.';
+  [infoW,infoH,infoC,infoF].forEach(e=>e.textContent='—');
+  statusText.textContent='No image loaded'; statusText.style.color='var(--text-dim)';
+  statusDims.textContent='';
+  fileInput.value='';
+});
+
+window.addEventListener('resize',()=>{
+  if(img&&colors.length){clearDots();requestAnimationFrame(()=>placeDots(colors));}
+});
+</script>
+</body>
+</html>

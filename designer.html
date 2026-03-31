@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TXEL — Palette Designer</title>
+<link rel="stylesheet" href="style.css">
+<style>
+body { overflow-y: auto; }
+.designer-layout {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.controls-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.ctrl-block {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+}
+.ctrl-block label {
+  font-size: 11px;
+  color: var(--text-dim);
+  min-width: 80px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.ctrl-block input[type=range] { width: 120px; }
+.ctrl-block span {
+  font-size: 11px;
+  font-weight: 600;
+  min-width: 36px;
+  text-align: right;
+  color: var(--accent);
+}
+.preset-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.section-heading {
+  font-size: 9px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 8px 0 6px;
+}
+.ramp-section { margin: 0 0 8px; }
+.ramp-label {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin: 0 0 3px;
+  display: flex;
+  justify-content: space-between;
+  letter-spacing: 1px;
+}
+.ramp-strip {
+  display: flex;
+  height: 28px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.ramp-strip div {
+  flex: 1;
+  min-width: 0;
+  transition: transform 0.1s;
+}
+.ramp-strip div:hover { transform: scaleY(1.3); z-index: 1; }
+.full-strip {
+  display: flex;
+  flex-wrap: wrap;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.full-strip div { width: 5.2px; height: 22px; }
+.hover-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+  background: var(--surface);
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  margin-top: 6px;
+}
+.hover-swatch {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.hover-info span { font-size: 11px; color: var(--text-dim); }
+.hover-info strong { font-weight: 600; color: var(--accent); }
+.stat-row { display: flex; gap: 10px; }
+.stat-card {
+  flex: 1;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.stat-card .n { font-size: 20px; font-weight: 600; color: var(--accent); }
+.stat-card .d { font-size: 10px; color: var(--text-dim); margin: 2px 0 0; letter-spacing: 1px; text-transform: uppercase; }
+.export-row { display: flex; gap: 8px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">
+    <div class="logo-icon"></div>
+    TXEL
+  </div>
+  <nav class="site-nav">
+    <a href="index.html">Texture</a>
+    <a href="extract.html">Extract</a>
+    <a href="designer.html" class="active">Designer</a>
+  </nav>
+  <div class="header-actions">
+    <button class="btn btn-primary" onclick="exportPNG()">Export PNG</button>
+    <button class="btn" onclick="exportGDScript()">Copy GDScript</button>
+  </div>
+</div>
+
+<div class="designer-layout">
+
+  <div class="preset-row">
+    <button class="btn" onclick="applyPreset('warm')">Warm Cinematic</button>
+    <button class="btn" onclick="applyPreset('cool')">Cool Moonlit</button>
+    <button class="btn" onclick="applyPreset('balanced')">Balanced Full</button>
+    <button class="btn" onclick="applyPreset('gritty')">Gritty Desaturated</button>
+  </div>
+
+  <div class="controls-row">
+    <div class="ctrl-block">
+      <label>Saturation</label>
+      <input type="range" min="20" max="100" value="65" step="1" id="sat" oninput="rebuild()">
+      <span id="sat-v">65%</span>
+    </div>
+    <div class="ctrl-block">
+      <label>Mid Desat</label>
+      <input type="range" min="0" max="50" value="15" step="1" id="middesat" oninput="rebuild()">
+      <span id="middesat-v">15%</span>
+    </div>
+    <div class="ctrl-block">
+      <label>Warm Bias</label>
+      <input type="range" min="0" max="100" value="60" step="1" id="warm" oninput="rebuild()">
+      <span id="warm-v">60%</span>
+    </div>
+    <div class="ctrl-block">
+      <label>Dark Crush</label>
+      <input type="range" min="0" max="40" value="10" step="1" id="crush" oninput="rebuild()">
+      <span id="crush-v">10</span>
+    </div>
+    <div class="ctrl-block">
+      <label>Brightness</label>
+      <input type="range" min="-30" max="30" value="0" step="1" id="bright" oninput="rebuild()">
+      <span id="bright-v">0</span>
+    </div>
+  </div>
+
+  <div>
+    <div class="section-heading">Hue Ramps</div>
+    <div id="ramps"></div>
+  </div>
+
+  <div>
+    <div class="ramp-label"><span>Full Palette</span><span id="count">128 colors</span></div>
+    <div class="full-strip" id="full"></div>
+    <div class="hover-info">
+      <div class="hover-swatch" id="hswatch"></div>
+      <span id="hinfo">Hover a color to inspect</span>
+    </div>
+  </div>
+
+  <div class="stat-row">
+    <div class="stat-card"><p class="n" id="s-hues">0</p><p class="d">Hue Ramps</p></div>
+    <div class="stat-card"><p class="n" id="s-total">0</p><p class="d">Total Colors</p></div>
+    <div class="stat-card"><p class="n" id="s-warm">0%</p><p class="d">Warm Colors</p></div>
+  </div>
+
+</div>
+
+<canvas id="export-canvas" style="display:none"></canvas>
+
+<script>
+const RAMP_DEFS = [
+  { name:'Gray',         hue:30,   sat:0.06, steps:28, warm:false },
+  { name:'Warm gray',    hue:30,   sat:0.12, steps:28, warm:true  },
+  { name:'Brown',        hue:25,   sat:0.55, steps:24, warm:true  },
+  { name:'Tan / sand',   hue:35,   sat:0.45, steps:14, warm:true  },
+  { name:'Orange',       hue:22,   sat:0.75, steps:14, warm:true  },
+  { name:'Red',          hue:0,    sat:0.65, steps:14, warm:true  },
+  { name:'Crimson',      hue:348,  sat:0.55, steps:14, warm:true  },
+  { name:'Pink / mauve', hue:320,  sat:0.35, steps:14, warm:false },
+  { name:'Purple',       hue:280,  sat:0.40, steps:14, warm:false },
+  { name:'Navy blue',    hue:230,  sat:0.45, steps:14, warm:false },
+  { name:'Sky blue',     hue:205,  sat:0.50, steps:14, warm:false },
+  { name:'Electric blue', hue:190, sat:0.75, steps:14, warm:false },
+  { name:'Teal',         hue:175,  sat:0.40, steps:14, warm:false },
+  { name:'Forest green', hue:140,  sat:0.55, steps:14, warm:false },
+  { name:'Olive',        hue:75,   sat:0.40, steps:14, warm:true  },
+  { name:'Yellow',       hue:50,   sat:0.70, steps:14, warm:true  },
+  { name:'Gold',         hue:42,   sat:0.65, steps:14, warm:true  },
+];
+
+function hslToRgb(h, s, l) {
+  h = ((h % 360) + 360) % 360;
+  s = Math.max(0, Math.min(1, s));
+  l = Math.max(0, Math.min(1, l));
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+  const m = l - c / 2;
+  let r, g, b;
+  if (h < 60) { r=c; g=x; b=0; }
+  else if (h < 120) { r=x; g=c; b=0; }
+  else if (h < 180) { r=0; g=c; b=x; }
+  else if (h < 240) { r=0; g=x; b=c; }
+  else if (h < 300) { r=x; g=0; b=c; }
+  else { r=c; g=0; b=x; }
+  return [Math.round((r+m)*255), Math.round((g+m)*255), Math.round((b+m)*255)];
+}
+
+function buildRamp(def, globalSat, midDesat, warmBias, crush, bright) {
+  const steps = def.warm ? Math.round(def.steps * (0.7 + warmBias * 0.6)) : def.steps;
+  const colors = [];
+  const isGray = def.sat <= 0.12;
+  const lift = isGray ? 0 : bright / 100;
+  for (let i = 0; i < steps; i++) {
+    let t = i / (steps - 1);
+    if (isGray) t = Math.pow(t, 0.7);
+    let lightness = (0.08 + lift) + t * (0.82 - lift);
+    lightness = Math.max(0.02, Math.min(0.98, lightness));
+    lightness = Math.pow(lightness, 1 + crush * 0.02);
+    let sat = def.sat * (globalSat / 100);
+    const midFactor = 1 - midDesat/100 * Math.pow(1 - Math.abs(t - 0.5) * 2, 2);
+    sat *= midFactor;
+    if (t < 0.15) sat *= 0.6 + t / 0.15 * 0.4;
+    if (t > 0.85) sat *= 1 - (t - 0.85) / 0.15 * 0.5;
+    const rgb = hslToRgb(def.hue, sat, lightness);
+    colors.push({ rgb, h: def.hue, s: Math.round(sat*100), l: Math.round(lightness*100) });
+  }
+  return { name: def.name, colors, warm: def.warm };
+}
+
+function rebuild() {
+  const sat = parseInt(document.getElementById('sat').value);
+  const mid = parseInt(document.getElementById('middesat').value);
+  const warm = parseInt(document.getElementById('warm').value);
+  const crush = parseInt(document.getElementById('crush').value);
+  const bright = parseInt(document.getElementById('bright').value);
+  document.getElementById('sat-v').textContent = sat + '%';
+  document.getElementById('middesat-v').textContent = mid + '%';
+  document.getElementById('warm-v').textContent = warm + '%';
+  document.getElementById('crush-v').textContent = crush;
+  document.getElementById('bright-v').textContent = bright;
+
+  const ramps = RAMP_DEFS.map(d => buildRamp(d, sat, mid, warm/100, crush, bright));
+  const rampsEl = document.getElementById('ramps');
+  rampsEl.innerHTML = '';
+  let allColors = [];
+  let warmCount = 0;
+
+  ramps.forEach(r => {
+    const sec = document.createElement('div');
+    sec.className = 'ramp-section';
+    const lbl = document.createElement('div');
+    lbl.className = 'ramp-label';
+    lbl.innerHTML = '<span>' + r.name + '</span><span>' + r.colors.length + ' steps</span>';
+    sec.appendChild(lbl);
+    const strip = document.createElement('div');
+    strip.className = 'ramp-strip';
+    r.colors.forEach(c => {
+      const d = document.createElement('div');
+      d.style.background = 'rgb(' + c.rgb.join(',') + ')';
+      d.addEventListener('mouseenter', () => showInfo(c));
+      strip.appendChild(d);
+    });
+    sec.appendChild(strip);
+    rampsEl.appendChild(sec);
+    allColors = allColors.concat(r.colors);
+    if (r.warm) warmCount += r.colors.length;
+  });
+
+  const fullEl = document.getElementById('full');
+  fullEl.innerHTML = '';
+  allColors.forEach(c => {
+    const d = document.createElement('div');
+    d.style.background = 'rgb(' + c.rgb.join(',') + ')';
+    d.addEventListener('mouseenter', () => showInfo(c));
+    fullEl.appendChild(d);
+  });
+
+  document.getElementById('count').textContent = allColors.length + ' colors';
+  document.getElementById('s-hues').textContent = ramps.length;
+  document.getElementById('s-total').textContent = allColors.length;
+  document.getElementById('s-warm').textContent = Math.round(warmCount / allColors.length * 100) + '%';
+
+  window._allColors = allColors;
+}
+
+function showInfo(c) {
+  document.getElementById('hswatch').style.background = 'rgb(' + c.rgb.join(',') + ')';
+  const hex = '#' + c.rgb.map(v => v.toString(16).padStart(2,'0')).join('');
+  document.getElementById('hinfo').innerHTML =
+    '<strong>' + hex + '</strong> &nbsp; rgb(' + c.rgb.join(', ') + ') &nbsp; hsl(' + c.h + ', ' + c.s + '%, ' + c.l + '%)';
+}
+
+function applyPreset(name) {
+  const p = {
+    warm:     { sat:60, mid:20, warm:80, crush:12, bright:5  },
+    cool:     { sat:50, mid:10, warm:30, crush:5,  bright:0  },
+    balanced: { sat:70, mid:10, warm:50, crush:8,  bright:0  },
+    gritty:   { sat:40, mid:30, warm:55, crush:18, bright:-5 },
+  }[name];
+  document.getElementById('sat').value = p.sat;
+  document.getElementById('middesat').value = p.mid;
+  document.getElementById('warm').value = p.warm;
+  document.getElementById('crush').value = p.crush;
+  document.getElementById('bright').value = p.bright;
+  rebuild();
+}
+
+function exportPNG() {
+  if (!window._allColors || !window._allColors.length) return;
+  const colors = window._allColors;
+  const canvas = document.getElementById('export-canvas');
+  canvas.width = colors.length;
+  canvas.height = 1;
+  const ctx = canvas.getContext('2d');
+  colors.forEach((c, i) => {
+    ctx.fillStyle = 'rgb(' + c.rgb.join(',') + ')';
+    ctx.fillRect(i, 0, 1, 1);
+  });
+  const a = document.createElement('a');
+  a.download = 'palette.png';
+  a.href = canvas.toDataURL('image/png');
+  a.click();
+}
+
+function exportGDScript() {
+  if (!window._allColors) return;
+  const lines = window._allColors.map(c =>
+    '\tColor8(' + c.rgb[0] + ', ' + c.rgb[1] + ', ' + c.rgb[2] + '),'
+  );
+  const text = 'const PALETTE: Array[Color] = [\n' + lines.join('\n') + '\n]';
+  const btn = document.querySelector('.header-actions .btn:last-child');
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  });
+}
+
+rebuild();
+</script>
+</body>
+</html>
