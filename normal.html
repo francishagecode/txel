@@ -20,8 +20,7 @@
 canvas#resultCanvas {
   image-rendering: pixelated;
   box-shadow: 0 0 60px rgba(0,0,0,0.5);
-  max-width: 100%;
-  max-height: 100%;
+  object-fit: contain;
 }
 canvas#hiddenCanvas { display: none; }
 .preview-strip {
@@ -264,6 +263,7 @@ function loadFile(file) {
       resultCanvas.style.display = 'block';
       dropZone.classList.add('hidden');
       spinner.style.display = 'none';
+      fitCanvas();
 
       document.getElementById('infoW').textContent = i.width;
       document.getElementById('infoH').textContent = i.height;
@@ -453,6 +453,18 @@ function renderSplit(normals, w, h) {
   ctx.stroke();
 }
 
+// ── Fit canvas to container ──
+function fitCanvas() {
+  if (!srcData) return;
+  const rect = canvasContainer.getBoundingClientRect();
+  const cw = rect.width, ch = rect.height;
+  const iw = srcData.width, ih = srcData.height;
+  const scale = Math.min(cw / iw, ch / ih);
+  resultCanvas.style.width  = Math.floor(iw * scale) + 'px';
+  resultCanvas.style.height = Math.floor(ih * scale) + 'px';
+}
+window.addEventListener('resize', fitCanvas);
+
 // ── Main pipeline ──
 function generate() {
   if (!srcData) return;
@@ -561,6 +573,8 @@ document.getElementById('downloadBtn').addEventListener('click', () => {
 document.getElementById('resetBtn').addEventListener('click', () => {
   srcImg = null; srcData = null; normalData = null; heightMap = null;
   resultCanvas.style.display = 'none';
+  resultCanvas.style.width = '';
+  resultCanvas.style.height = '';
   dropZone.classList.remove('hidden');
   dropZone.querySelector('.drop-text').textContent = 'Drop image here';
   [document.getElementById('infoW'), document.getElementById('infoH'),
