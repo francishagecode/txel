@@ -735,7 +735,9 @@ function renderView() {
 function updateVisibility() {
   document.querySelectorAll('[data-maps]').forEach(el => {
     const list = el.getAttribute('data-maps').split(/\s+/);
-    el.style.display = list.includes(mapType) ? '' : 'none';
+    // Set an explicit value — clearing to '' would fall back to the
+    // `[data-maps]{display:none}` stylesheet rule and stay hidden.
+    el.style.display = list.includes(mapType) ? 'block' : 'none';
   });
   // Height view is only meaningful for normal maps
   const heightBtn = document.getElementById('viewHeight');
